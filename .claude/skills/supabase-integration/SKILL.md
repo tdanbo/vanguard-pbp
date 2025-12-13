@@ -15,6 +15,8 @@ This skill provides patterns and implementation guidance for integrating Supabas
 
 Supabase Auth handles all user authentication with JWT tokens and sliding window sessions.
 
+> **API Key Migration Note**: Supabase has transitioned to new API keys (late 2024). Legacy keys (`anon`, `service_role`) work until late 2026, but new projects should use the new key format (`sb_publishable_...`, `sb_secret_...`). JWT verification now uses JWKS (asymmetric) instead of shared secrets.
+
 #### Auth Configuration
 
 ```typescript
@@ -22,9 +24,10 @@ Supabase Auth handles all user authentication with JWT tokens and sliding window
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Use VITE_SUPABASE_PUBLISHABLE_KEY (new) or VITE_SUPABASE_ANON_KEY (legacy)
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -59,22 +62,59 @@ const { data, error } = await supabase.auth.signUp({
 
 #### JWT Validation (Backend)
 
+JWT verification uses JWKS (JSON Web Key Set) for asymmetric key validation. This is more secure than shared secrets and automatically handles key rotation.
+
 ```go
-// backend/internal/api/middleware/auth.go
+// backend/internal/middleware/auth.go
 package middleware
 
 import (
     "context"
+    "errors"
     "net/http"
     "strings"
+    "time"
 
+    "github.com/MicahParks/keyfunc/v2"
     "github.com/gin-gonic/gin"
-    "github.com/supabase-community/gotrue-go"
+    "github.com/golang-jwt/jwt/v5"
 )
 
-func AuthMiddleware(supabaseURL, serviceKey string) gin.HandlerFunc {
-    client := gotrue.New(supabaseURL, serviceKey)
+// JWKS holds the cached JSON Web Key Set for JWT validation
+type JWKS struct {
+    keyFunc *keyfunc.JWKS
+}
 
+// NewJWKS creates a new JWKS validator from a Supabase project URL
+// JWKS URL format: https://[PROJECT_REF].supabase.co/auth/v1/.well-known/jwks.json
+func NewJWKS(jwksURL string) (*JWKS, error) {
+    kf, err := keyfunc.Get(jwksURL, keyfunc.Options{
+        RefreshInterval:   time.Hour,      // Refresh keys every hour
+        RefreshRateLimit:  time.Minute * 5, // Rate limit refresh attempts
+        RefreshTimeout:    time.Second * 10,
+        RefreshUnknownKID: true,           // Refresh if unknown key ID encountered
+    })
+    if err != nil {
+        return nil, err
+    }
+    return &JWKS{keyFunc: kf}, nil
+}
+
+// Close shuts down the JWKS background refresh
+func (j *JWKS) Close() {
+    j.keyFunc.EndBackground()
+}
+
+// Claims represents the JWT claims from Supabase Auth
+type Claims struct {
+    jwt.RegisteredClaims
+    Email         string `json:"email"`
+    EmailVerified bool   `json:"email_verified"`
+    Role          string `json:"role"`
+}
+
+// AuthMiddleware validates JWTs using JWKS
+func AuthMiddleware(jwks *JWKS) gin.HandlerFunc {
     return func(c *gin.Context) {
         authHeader := c.GetHeader("Authorization")
         if authHeader == "" {
@@ -83,21 +123,45 @@ func AuthMiddleware(supabaseURL, serviceKey string) gin.HandlerFunc {
             return
         }
 
-        token := strings.TrimPrefix(authHeader, "Bearer ")
+        tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-        // Validate JWT with Supabase
-        user, err := client.User(context.Background(), token)
+        // Parse and validate JWT using JWKS
+        token, err := jwt.ParseWithClaims(tokenString, &Claims{}, jwks.keyFunc.Keyfunc)
         if err != nil {
             c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
             c.Abort()
             return
         }
 
-        // Add user ID to context
-        c.Set("user_id", user.ID)
+        claims, ok := token.Claims.(*Claims)
+        if !ok || !token.Valid {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+            c.Abort()
+            return
+        }
+
+        // Add user ID to context (Subject contains the user UUID)
+        c.Set("user_id", claims.Subject)
+        c.Set("user_email", claims.Email)
         c.Next()
     }
 }
+```
+
+**Initialization in main.go:**
+
+```go
+// Initialize JWKS validator
+jwksURL := os.Getenv("SUPABASE_JWKS_URL") // https://[PROJECT_REF].supabase.co/auth/v1/.well-known/jwks.json
+jwks, err := middleware.NewJWKS(jwksURL)
+if err != nil {
+    log.Fatalf("Failed to initialize JWKS: %v", err)
+}
+defer jwks.Close()
+
+// Apply middleware
+api := router.Group("/api/v1")
+api.Use(middleware.AuthMiddleware(jwks))
 ```
 
 #### OAuth Providers
