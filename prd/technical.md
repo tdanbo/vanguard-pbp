@@ -30,13 +30,21 @@ JavaScript runtime and package manager. Significantly faster than Node.js for de
 
 Next-generation frontend build tool. Instant dev server startup with native ES modules—no bundling during development. Hot module replacement (HMR) updates components in milliseconds. Optimized production builds with Rollup under the hood. First-class TypeScript and React support out of the box.
 
+### ESLint
+
+Static analysis tool for identifying and fixing problems in JavaScript/TypeScript code. Enforces consistent code style and catches common errors before runtime. Configured with TypeScript-aware rules and React-specific plugins. Integrated into the development workflow via pre-commit hooks and CI pipeline. Provides immediate feedback in IDE with auto-fix capabilities for many issues.
+
 ---
 
 ## Backend
 
 ### Go
 
-The backend language. Compiles to a single binary with no runtime dependencies. Excellent performance and low memory footprint. Strong concurrency model with goroutines for handling many simultaneous WebSocket connections. Static typing catches errors early. Simple deployment—just copy the binary.
+The backend language. Compiles to a single binary with no runtime dependencies. Excellent performance and low memory footprint. Strong concurrency model with goroutines for handling concurrent API requests. Static typing catches errors early. Simple deployment—just copy the binary.
+
+### golangci-lint
+
+Fast, configurable Go linter aggregator. Runs multiple linters in parallel (errcheck, staticcheck, gosec, and more) with a single command. Catches bugs, enforces style consistency, and identifies security issues before code review. Configured via `.golangci.yml` for project-specific rules. Integrated into CI pipeline and pre-commit hooks for automated enforcement.
 
 ### PostgreSQL
 
@@ -78,16 +86,16 @@ Generate type-safe Go code from SQL queries. Write plain SQL, get Go functions w
            ▼                  ▼                    ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Go API Server                           │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐   │
-│  │  HTTP Routes  │  │  Auth         │  │  WebSocket Hub    │   │
-│  │  /api/*       │  │  (Supabase)   │  │  (goroutines)     │   │
-│  └───────┬───────┘  └───────┬───────┘  └─────────┬─────────┘   │
-│          │                  │                    │              │
-│          └──────────────────┼────────────────────┘              │
+│  ┌───────────────┐  ┌───────────────┐                          │
+│  │  HTTP Routes  │  │  Auth         │                          │
+│  │  /api/*       │  │  (Supabase)   │                          │
+│  └───────┬───────┘  └───────┬───────┘                          │
+│          │                  │                                   │
+│          └──────────────────┘                                   │
 │                             │                                   │
 │  ┌──────────────────────────▼──────────────────────────────┐   │
 │  │                    Service Layer                         │   │
-│  │  Campaign │ Scene │ Action │ Witness │ Roll │ Notify    │   │
+│  │  Campaign │ Scene │ Post │ Character │ Roll │ Notify    │   │
 │  └──────────────────────────┬──────────────────────────────┘   │
 │                             │                                   │
 │  ┌──────────────────────────▼──────────────────────────────┐   │
@@ -98,11 +106,13 @@ Generate type-safe Go code from SQL queries. Write plain SQL, get Go functions w
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   Supabase (PostgreSQL)                         │
-│  users │ campaigns │ scenes │ actions │ witnesses │ rolls      │
+│  users │ campaigns │ scenes │ posts │ characters │ rolls       │
 │                                                                 │
 │  Row-Level Security │ Real-time │ Storage │ Auth               │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Note:** Real-time updates are handled exclusively by Supabase Real-time subscriptions. The Go backend handles REST API requests only—no WebSocket hub is needed.
 
 ---
 
@@ -128,33 +138,45 @@ interface Campaign {
   description: string;
   ownerId: string | null;  // FK to User (GM), null if GM deleted account
   settings: CampaignSettings;
-  status: 'active' | 'paused' | 'archived';
-  currentTurn: number;     // Global turn counter
-  storageUsedBytes: number; // Track storage for 500MB limit
+  currentPhase: 'pc_phase' | 'gm_phase';  // Global phase state (all scenes sync), defaults to 'gm_phase'
+  currentPhaseExpiresAt: Date | null;     // When current PC phase time gate expires (null during GM phase)
+  isPaused: boolean;       // When true, time gate is frozen. Only state needed (no status enum).
+  lastGmActivityAt: Date;  // For 30-day inactivity tracking (only GM posts count as activity)
+  storageUsedBytes: number; // Track storage for 500MB limit (images only)
+  sceneCount: number;      // Track for 25-scene limit warnings
   createdAt: Date;
   updatedAt: Date;
 }
+// Note: Campaigns are either active (isPaused: false) or paused (isPaused: true).
+// Campaigns can be deleted but not archived. Users limited to 5 campaigns.
+// Note: When time gate expires, phase doesn't auto-transition. GM must manually click transition button.
+// Note: Phase expiration is derived: currentPhaseExpiresAt < now (no separate boolean field needed).
 
 interface InviteLink {
   id: string;              // UUID
   campaignId: string;      // FK to Campaign
   code: string;            // Cryptographically random
+  createdBy: string;       // FK to User (GM who created it)
   expiresAt: Date;         // 24 hours from creation
   usedAt: Date | null;     // Null until consumed
   usedBy: string | null;   // FK to User who joined
+  revokedAt: Date | null;  // Null unless GM revoked the link
+  createdAt: Date;
 }
+// Note: GM can generate multiple links, view all active links, and revoke any link.
+// No hard limit on concurrent links (~100 soft limit).
 
 interface CampaignSettings {
-  timeGatePreset: '24h' | '2d' | '3d' | '4d' | '5d';  // Fixed presets only
+  timeGatePreset: '24h' | '2d' | '3d' | '4d' | '5d';  // Fixed presets only (default: 24h)
   fogOfWar: boolean;
-  hiddenTurns: boolean;
-  composeLockMinutes: number;
-  oocVisibility: 'all' | 'gm_only';
+  hiddenPosts: boolean;
+  oocVisibility: 'all' | 'gm_only';  // Default: gm_only
   characterLimit: 1000 | 3000 | 6000 | 10000;
-  gmInactivityDays: number | null;  // null = disabled
   rollRequestTimeoutHours: number;  // For GM-requested rolls
   systemPreset: SystemPreset;
 }
+// Note: Compose lock timeout is fixed at 10 minutes (not configurable).
+// Note: GM inactivity threshold is fixed at 30 days (not configurable).
 
 interface SystemPreset {
   name: string;            // e.g., "D&D 5e", "Pathfinder 2e", "Custom"
@@ -170,12 +192,53 @@ interface CampaignMember {
   id: string;              // UUID
   campaignId: string;      // FK to Campaign
   userId: string;          // FK to User
-  displayName: string;     // Character/player name
-  avatarUrl: string | null;
   role: 'gm' | 'player';
-  status: 'active' | 'removed';
   joinedAt: Date;
 }
+```
+
+### Characters
+
+Characters are campaign-owned entities. Assignment to users is separate.
+
+```typescript
+interface Character {
+  id: string;              // UUID
+  campaignId: string;      // FK to Campaign
+  displayName: string;     // Character name visible to others
+  description: string;     // Character description
+  avatarUrl: string | null;
+  characterType: 'pc' | 'npc';  // Determines UI presentation only
+  isArchived: boolean;     // Archived characters cannot be added to scenes
+  createdAt: Date;
+  updatedAt: Date;
+}
+// Note: Characters are owned by campaigns, not users.
+// Note: characterType only affects which UI interfaces the character appears in.
+// Note: GM can promote/demote between PC and NPC via edit modal (GM Phase only).
+// Note: Archived characters are visible to GM (greyed out) but invisible to players.
+// Note: GM can un-archive characters at any time. Posts from archived characters remain.
+// Note: Characters CANNOT be deleted - only archived or orphaned. This preserves post relationships.
+// Note: Character records are immutable anchors linking posts to game history.
+```
+
+### Character Assignments
+
+Links characters to the users who control them.
+
+```typescript
+interface CharacterAssignment {
+  id: string;              // UUID
+  characterId: string;     // FK to Character
+  userId: string;          // FK to User
+  assignedAt: Date;
+}
+// Unique constraint: one user per character at a time.
+// When a user leaves/is kicked, their assignments are deleted.
+// Orphaned characters (no assignment) cannot be added to new scenes.
+// GM can reassign orphaned characters or take control to write them out.
+// Orphaned characters don't count toward "all characters passed" check.
+// When re-assigned and re-added to a scene, they see all posts they previously witnessed.
 ```
 
 ### Scenes
@@ -185,103 +248,232 @@ interface Scene {
   id: string;              // UUID
   campaignId: string;      // FK to Campaign
   title: string;
-  description: string;     // Opening narrative
-  timeGateHours: number | null;  // Override campaign default
-  status: 'active' | 'paused' | 'archived';
-  turnState: 'gm_turn' | 'player_window' | 'resolving';
-  windowStartedAt: Date | null;  // When current window opened
+  description: string;     // Opening narrative (GM can update mid-scene)
+  headerImageUrl: string | null;  // Optional 16:9 header image
+  characters: string[];    // Character IDs currently in scene (PCs + NPCs)
+  passStates: Record<string, 'none' | 'passed' | 'hard_passed'>;  // Per-character pass state
+  status: 'active' | 'archived';
+  windowStartedAt: Date | null;  // When current PC phase window opened
   createdAt: Date;
   updatedAt: Date;
 }
+// Note: Phase state is on Campaign, not Scene (global sync).
+// Note: Campaigns pause, not scenes. Scene has no 'paused' status.
+// Note: Use characterType field on Character to filter PCs vs NPCs in UI.
+// Note: passStates is the single source of truth for pass state (no separate ScenePresence table).
+// Note: When character added to scene, passStates[characterId] initialized to 'none'.
+// Note: When character removed from scene, passStates entry is removed.
 ```
 
-### Scene Presence
+### Posts
+
+A post is a single character's submission during a PC Phase (or GM during GM Phase).
 
 ```typescript
-interface ScenePresence {
+interface Post {
   id: string;              // UUID
   sceneId: string;         // FK to Scene
-  memberId: string;        // FK to CampaignMember
-  status: 'present' | 'departed';
-  passState: 'none' | 'passed' | 'hard_passed';
-  enteredAt: Date;
-  departedAt: Date | null;
-}
-```
-
-### Turns
-
-```typescript
-interface Turn {
-  id: string;              // UUID
-  sceneId: string;         // FK to Scene
-  authorId: string;        // FK to CampaignMember
-  blocks: TurnBlock[];     // Structured content blocks
-  isHidden: boolean;       // Only GM can see
-  intention: string | null; // e.g., "intimidation", "stealth"
+  characterId: string | null;  // FK to Character, null = Narrator (GM only)
+  userId: string;          // FK to User who created this post
+  blocks: PostBlock[];     // Structured content blocks (cannot be empty strings)
+  oocText: string | null;  // Out-of-character text (visibility per campaign setting)
+  witnesses: string[];     // Character IDs who can see this post. Empty = hidden (GM only).
+  submitted: boolean;      // false = draft, true = live/visible
+  intention: string | null; // e.g., "intimidation", "stealth". Mutable (updated on GM override).
   modifier: number | null; // Player-provided modifier for roll
+  isLocked: boolean;       // Becomes true when next post is created
+  lockedAt: Date | null;   // When next post locked this one
+  editedByGm: boolean;     // Shows "Edited by GM" badge if true
   createdAt: Date;
   updatedAt: Date;
-  lockedAt: Date | null;   // When next turn witnessed this
-  editedByGm: boolean;     // Shows "Edited by GM" badge if true
 }
+// Note: No isHidden field needed. witnesses: [] signals hidden post (GM only).
+// Note: Draft lifecycle: acquire lock → create Post with submitted: false → edit → submit (submitted: true, witnesses calculated)
+// Note: Drafts are server-persisted, sync across tabs (same DB entry).
 
-interface TurnBlock {
+interface PostBlock {
   type: 'action' | 'dialog';
   content: string;
-  order: number;           // Sequence within turn
+  order: number;           // Sequence within post
 }
 ```
 
-### Witnesses
+**Witness Selection (GM only):**
+- **Default:** All PCs currently in scene become witnesses
+- **Custom:** GM selects specific characters to witness the post
+- **Hidden:** No witnesses until GM unhides (then retroactively adds them)
 
-```typescript
-interface TurnWitness {
-  id: string;              // UUID
-  turnId: string;          // FK to Turn
-  memberId: string;        // FK to CampaignMember
-  witnessedAt: Date;
-}
-```
+**Post Locking:**
+- Posts lock when the next post is created in the scene
+- Locked posts cannot be edited (except by GM for moderation)
+- When a post is deleted, the previous post becomes unlocked
+
+**OOC Visibility:**
+- Controlled by campaign setting (`all` or `gm_only`)
+- OOC is metadata on the post, not a block type
 
 ### Rolls
 
 ```typescript
 interface Roll {
   id: string;              // UUID
-  turnId: string | null;   // FK to Turn (if player-initiated)
+  postId: string | null;   // FK to Post (if player-initiated)
   sceneId: string;         // FK to Scene
-  memberId: string;        // FK to CampaignMember (roller)
+  characterId: string;     // FK to Character (roller)
   requestedBy: string | null;  // FK to CampaignMember (GM) if requested
-  intention: string;       // Selected from system preset
+  intention: string;       // Selected from system preset (final value after any override)
   modifier: number;        // Player-provided modifier (max ±100)
   diceType: string;        // From system preset (e.g., "d20")
-  diceCount: number;       // Number of dice (max 100)
+  diceCount: number;       // Number of dice (1-100, player-configurable per roll)
   result: number[];        // Individual die results
   total: number;           // Sum with modifiers
-  gmOverrideIntention: string | null;  // If GM swapped intention
+  wasOverridden: boolean;  // True if GM overrode the intention
+  originalIntention: string | null;  // Original intention before GM override (if any)
   status: 'pending' | 'completed' | 'invalidated';
   createdAt: Date;
 }
+// Note: When GM overrides intention, Post.intention is also updated. Player receives notification.
+// Note: Roll visibility follows post witness rules (same as post visibility).
+// Note: GM can resolve rolls for hard-passed players by clicking intent button → roll → submit.
 ```
 
 **Notes:**
 - All rolls execute server-side only
+- Default roll: 1d20 (configurable via system preset)
 - GM can invalidate suspicious rolls
 - Original intention preserved even if GM overrides
 - Supported dice: d4, d6, d8, d10, d12, d20, d100
 - Max modifier: ±100, max dice per type: 100
+- No auto-roll on timeout: GM must manually resolve unresolved rolls
 
-### Compose Locks
+### Compose Sessions
 
 ```typescript
-interface ComposeLock {
-  sceneId: string;         // FK to Scene (unique)
-  memberId: string;        // FK to CampaignMember
+interface ComposeSession {
+  id: string;              // UUID
+  sceneId: string;         // FK to Scene
+  characterId: string;     // FK to Character (lock is per-character)
+  userId: string;          // FK to User (who holds the lock)
   acquiredAt: Date;
   lastActivityAt: Date;
+  expiresAt: Date;         // acquiredAt + 10 minutes
+}
+// Lock timeout: Fixed at 10 minutes of inactivity.
+// Heartbeat resets lastActivityAt on each keystroke.
+// Lock auto-releases when 10-minute inactivity threshold is reached.
+// Unique constraint: (sceneId, characterId) - one lock per character per scene.
+// Lock is per-character: user must release lock and reacquire for different character.
+// Rate limit: lock acquire/release limited to once per 5 seconds.
+```
+
+### Bookmarks
+
+Character-scoped memories that create quick links within the game log.
+
+```typescript
+interface Bookmark {
+  id: string;              // UUID
+  characterId: string;     // FK to Character (the character doing the bookmarking)
+  type: 'character' | 'scene' | 'post';  // Can bookmark any character (PC or NPC)
+  referencedEntityId: string;  // FK to the bookmarked entity
+  createdAt: Date;
+}
+// Unique constraint: (characterId, type, referencedEntityId)
+// One bookmark per entity per character.
+// Scoped per character per campaign (different characters have different bookmarks).
+```
+
+**Functionality:**
+- **Characters:** Navigate to first/last encounter with any character (PC or NPC)
+- **Scenes:** Navigate directly to the scene
+- **Posts:** Navigate to that specific post within a scene
+
+### Notification Preferences
+
+User-level settings for notification delivery.
+
+```typescript
+interface NotificationPreferences {
+  id: string;              // UUID
+  userId: string;          // FK to User
+  emailNotifications: boolean;
+  inAppNotifications: boolean;  // Always true (cannot disable)
+  frequency: 'realtime' | 'digest_daily' | 'digest_weekly' | 'off';
+  createdAt: Date;
+  updatedAt: Date;
 }
 ```
+
+### Quiet Hours
+
+User-level quiet hours prevent notifications during specified times.
+
+```typescript
+interface QuietHours {
+  id: string;              // UUID
+  userId: string;          // FK to User
+  enabled: boolean;
+  startTime: string;       // HH:mm format (e.g., "21:00")
+  endTime: string;         // HH:mm format (e.g., "08:00")
+  timezone: string;        // IANA timezone (e.g., "America/New_York")
+  createdAt: Date;
+  updatedAt: Date;
+}
+// During quiet hours, notifications are queued and sent after the quiet period ends.
+```
+
+---
+
+## Phase Transitions & Witness Transaction
+
+### GM Phase Setup
+
+During GM Phase, the GM can freely post content, add/remove characters, and rearrange scenes. Posts created during GM Phase have empty witness lists (`witnesses: []`) until the phase transition.
+
+### Witness Transaction (GM Phase → PC Phase)
+
+When the GM clicks "Move to PC Phase", a **witness transaction** occurs:
+
+1. System queries final `Scene.characters` for each scene (all currently present PCs + NPCs)
+2. All GM Phase posts receive these characters as witnesses atomically
+3. Everything becomes visible to present characters simultaneously
+
+**Character Removal Mid-Setup:**
+- If GM removes a character during GM Phase setup, they're not in final `Scene.characters`
+- Those characters don't become witnesses to GM Phase posts
+- They "weren't there when lights turned on"
+
+**Result:** GM has complete setup flexibility. Players see a coherent snapshot when PC Phase begins.
+
+### Compose Lock for Hidden Posts
+
+Hidden posts (posts with `witnesses: []` during PC Phase) require the compose lock like normal posts. However, the UI shows a generic message to other players: **"Another player is currently posting"** (no name, no character identity revealed).
+
+---
+
+## Scene Limits & Cleanup
+
+### Scene Limit
+
+- **Hard limit:** 25 scenes per campaign
+- **Warning thresholds:** Notify GM at 20, 23, 24 scenes
+- **Auto-deletion:** When creating 26th scene, oldest archived scene is permanently deleted
+- **Manual cleanup:** GM can archive/delete scenes before hitting the limit
+
+### Scene Lifecycle
+
+1. **Active:** Scene is playable, receives posts
+2. **Empty:** All characters moved out (GM can archive)
+3. **Archived:** Read-only, visible in game log, still consumes storage
+4. **Deleted:** Permanently removed, storage freed, removed from game log
+
+### Campaign Cleanup
+
+- **GM inactivity:** After 30 days of no GM activity, GM position becomes claimable
+- **Unclaimed campaign:** If no one claims GM within 30 days, campaign enters deletion countdown
+- **Deletion warnings:** Days 10, 20, 25, 29
+- **Day 30:** Campaign and all data permanently deleted
+- **Campaign ownership limit:** Each user can own max 5 campaigns
 
 ---
 
@@ -315,11 +507,34 @@ PATCH  /api/campaigns/:id                Update campaign settings
 DELETE /api/campaigns/:id                Permanently delete campaign (requires name confirmation)
 POST   /api/campaigns/:id/join           Join via invite code
 POST   /api/campaigns/:id/invite         Generate invite link (fails if at 50 players)
+GET    /api/campaigns/:id/invites        List all invite links (active, used, expired, revoked)
+DELETE /api/campaigns/:id/invites/:code  Revoke an invite link (GM only)
 POST   /api/campaigns/:id/claim-gm       Claim GM role (if available)
 GET    /api/campaigns/:id/members        List members
-PATCH  /api/campaigns/:id/members/:mid   Update member (name, avatar)
 DELETE /api/campaigns/:id/members/:mid   Remove member
 ```
+
+### Characters
+
+```
+GET    /api/campaigns/:id/characters              List characters in campaign
+POST   /api/campaigns/:id/characters              Create character (player or GM)
+GET    /api/characters/:id                        Get character details
+PATCH  /api/characters/:id                        Update character (name, avatar, type, archived)
+POST   /api/characters/:id/reassign               Reassign character to different player (GM only)
+```
+
+**Character Archival:**
+- Use `PATCH /api/characters/:id` with `{ archived: true }` to archive
+- Use `PATCH /api/characters/:id` with `{ archived: false }` to un-archive
+- Archived characters visible to GM (greyed out), invisible to players
+- Archived characters cannot be added to scenes
+- Posts from archived characters remain accessible
+
+**Character Deletion: NOT SUPPORTED**
+- Characters cannot be deleted - they are immutable relationship records
+- Characters can only be archived (hidden) or orphaned (user left)
+- This design preserves post relationships and game history integrity
 
 **Campaign Deletion:**
 - Permanently deletes all data (scenes, turns, images, rolls)
@@ -338,53 +553,112 @@ POST   /api/scenes/:id/presence          Add member to scene (GM)
 DELETE /api/scenes/:id/presence/:mid     Remove member (GM)
 ```
 
-### Turns
+### Posts
 
 ```
-GET    /api/scenes/:id/turns             Get witnessed turns
-POST   /api/scenes/:id/turns             Post turn
-PATCH  /api/turns/:id                    Edit turn (if not locked, or GM edit)
-DELETE /api/turns/:id                    Delete turn (GM only)
+GET    /api/scenes/:id/posts             Get witnessed posts
+POST   /api/scenes/:id/posts             Create post
+PATCH  /api/posts/:id                    Edit post (if not locked, or GM edit)
+DELETE /api/posts/:id                    Delete post (GM only)
 ```
 
 **GM Moderation:**
-- GM can edit any turn at any point (sets `editedByGm: true`)
-- GM can delete any turn at any point
+- GM can edit any post at any point (sets `editedByGm: true`)
+- GM can delete any post at any point
 - Edits show small "Edited by GM" badge, no version history
+- When a post is deleted, the previous post becomes unlocked
 
-### Turn Flow
+### Phase Flow
 
 ```
-POST   /api/scenes/:id/pass              Pass turn
-POST   /api/scenes/:id/hard-pass         Hard pass
-POST   /api/campaigns/:id/resolve        GM resolution for all scenes (opens new window)
+POST   /api/scenes/:id/pass/:characterId       Pass for character
+POST   /api/scenes/:id/hard-pass/:characterId  Hard pass for character
+POST   /api/scenes/:id/unpass/:characterId     Undo pass for character
+POST   /api/campaigns/:id/transition           GM transitions to next phase (pc_phase or gm_phase)
+POST   /api/campaigns/:id/pause                Pause campaign (freezes time gate)
+POST   /api/campaigns/:id/resume               Resume campaign
 ```
+
+**Phase Transition:**
+- `transition` endpoint validates all rolls are resolved before allowing GM to move to PC phase
+- Returns error if unresolved rolls exist
+
+**Posting Rules:**
+- No limit on posts per character per phase
+- Users can post as the same character multiple times in a row
+- Only constraint is post locking (previous post locks when new post is created)
 
 ### Rolls
 
 ```
-POST   /api/scenes/:id/rolls             Execute roll (with turn submission)
-POST   /api/scenes/:id/roll-request      GM requests roll from player
 GET    /api/scenes/:id/rolls             Get scene rolls (witnessed)
+POST   /api/scenes/:id/rolls             Execute roll (with post submission)
+POST   /api/scenes/:id/roll-request      GM requests roll from player
+POST   /api/posts/:id/rolls              GM executes roll on behalf of player (for hard-passed characters)
 ```
 
-**Roll Request Timeout:**
-- GM-requested rolls have configurable timeout
-- If player doesn't respond, auto-roll with zero modifier
+**Roll Resolution:**
+- GM-requested rolls must be resolved before phase transition
+- No auto-roll: GM must manually resolve unresolved rolls
+- GM can add/change intent and roll on behalf of player using `POST /api/posts/:id/rolls`
 
 ### Compose Lock
 
 ```
-POST   /api/scenes/:id/compose/acquire   Acquire compose lock
+POST   /api/scenes/:id/compose/acquire   Acquire compose lock (requires characterId in body)
 POST   /api/scenes/:id/compose/release   Release compose lock
 POST   /api/scenes/:id/compose/heartbeat Keep lock alive
+GET    /api/scenes/:id/compose/status    Get current lock holder (if any)
+```
+
+**Lock Behavior:**
+- Lock is per-character, not per-user
+- Request body for acquire: `{ characterId: string }`
+- User must release and reacquire to post as different character
+
+### Bookmarks
+
+```
+GET    /api/campaigns/:id/characters/:charId/bookmarks  List bookmarks for character
+POST   /api/bookmarks                                   Create bookmark
+DELETE /api/bookmarks/:id                               Delete bookmark
+```
+
+**Bookmark Types:**
+- `character` - Navigate to first/last encounter with any character (PC or NPC)
+- `scene` - Navigate directly to the scene
+- `post` - Navigate to that specific post within a scene
+
+### Users
+
+```
+GET    /api/users/:id                    Get user details (includes notification preferences, quiet hours)
+PATCH  /api/users/:id                    Update user settings
+GET    /api/users/:id/campaigns          List user's campaigns
+```
+
+**User Settings Payload:**
+```typescript
+{
+  notificationPreferences?: {
+    emailNotifications: boolean;
+    inAppNotifications: boolean;  // Always true
+    frequency: 'realtime' | 'digest_daily' | 'digest_weekly' | 'off';
+  };
+  quietHours?: {
+    enabled: boolean;
+    startTime: string;  // HH:mm format
+    endTime: string;    // HH:mm format
+    timezone: string;   // IANA timezone
+  };
+}
 ```
 
 ---
 
 ## Real-time Events
 
-Using Supabase Realtime or custom WebSocket:
+Using **Supabase Real-Time subscriptions** for campaign-wide and scene-level events. Clients subscribe to table changes (campaigns, scenes, posts) and receive updates automatically. No separate "campaign room" needed—Supabase subscriptions handle all real-time updates atomically.
 
 ### Client → Server
 
@@ -405,35 +679,42 @@ Using Supabase Realtime or custom WebSocket:
 ### Server → Client
 
 ```typescript
-// New turn posted
-{ event: 'turn:new', turn: Turn, witnesses: string[] }
+// New post created
+{ event: 'post:new', post: Post }
 
-// Turn edited
-{ event: 'turn:edit', turn: Turn }
+// Post edited
+{ event: 'post:edit', post: Post }
 
-// Turn deleted (GM moderation)
-{ event: 'turn:delete', turnId: string }
+// Post deleted (GM moderation)
+{ event: 'post:delete', postId: string }
 
-// Player started typing
-{ event: 'compose:start', sceneId: string, memberId: string }
+// Post unlocked (previous post deleted)
+{ event: 'post:unlocked', postId: string }
 
-// Player stopped typing / lock released
+// Player started composing (acquired lock)
+// Note: UI shows "Another player is currently posting" (no identity) to prevent hidden post leakage
+{ event: 'compose:start', sceneId: string }  // No identity exposed - UI shows generic "Another player is posting"
+
+// Player stopped composing / lock released
 { event: 'compose:end', sceneId: string }
 
-// Player passed
-{ event: 'window:pass', sceneId: string, memberId: string }
+// Character passed
+{ event: 'pass:update', sceneId: string, characterId: string, passState: string }
 
-// Window closed (all passed or timeout) - campaign-wide
-{ event: 'window:closed', campaignId: string }
+// Phase transition - campaign-wide
+{ event: 'phase:transition', campaignId: string, newPhase: 'pc_phase' | 'gm_phase' }
 
-// GM posted resolution, new window opened - campaign-wide
-{ event: 'window:opened', campaignId: string, turnNumber: number }
+// Time gate warning
+{ event: 'timegate:warning', campaignId: string, remainingMinutes: number }
 
-// Member added to scene
-{ event: 'presence:add', sceneId: string, member: CampaignMember }
+// Character added to scene
+{ event: 'presence:add', sceneId: string, character: Character }
 
-// Member left scene
-{ event: 'presence:remove', sceneId: string, memberId: string }
+// Character left scene
+{ event: 'presence:remove', sceneId: string, characterId: string }
+
+// Scene limit warning
+{ event: 'scene:limit_warning', campaignId: string, currentCount: number, limit: number }
 
 // Roll result
 { event: 'roll:result', roll: Roll }
@@ -442,7 +723,7 @@ Using Supabase Realtime or custom WebSocket:
 { event: 'gm:available', campaignId: string }
 
 // Campaign paused/resumed
-{ event: 'campaign:status', campaignId: string, status: string }
+{ event: 'campaign:status', campaignId: string, status: 'active' | 'paused' }
 ```
 
 ---
@@ -475,7 +756,7 @@ frontend/
 │   │   ├── ui/                   # shadcn/ui components
 │   │   ├── campaign/             # Campaign-specific components
 │   │   ├── scene/                # Scene view components
-│   │   ├── turn/                 # Turn display and composer
+│   │   ├── post/                 # Post display and composer
 │   │   └── roll/                 # Dice rolling UI
 │   ├── hooks/
 │   │   ├── use-auth.ts
@@ -516,25 +797,20 @@ backend/
 │   │   └── handlers/
 │   │       ├── campaigns.go
 │   │       ├── scenes.go
-│   │       ├── turns.go
+│   │       ├── posts.go
 │   │       └── rolls.go
 │   ├── service/
 │   │   ├── campaign.go
 │   │   ├── scene.go
-│   │   ├── turn.go
-│   │   ├── witness.go
+│   │   ├── post.go
 │   │   ├── roll.go
 │   │   └── notification.go
-│   ├── websocket/
-│   │   ├── hub.go                # Connection manager
-│   │   ├── client.go             # Client handling
-│   │   └── events.go             # Event types
 │   ├── db/
 │   │   ├── queries/              # SQL files for sqlc
 │   │   │   ├── campaigns.sql
 │   │   │   ├── scenes.sql
-│   │   │   ├── turns.sql
-│   │   │   └── witnesses.sql
+│   │   │   ├── posts.sql
+│   │   │   └── characters.sql
 │   │   └── generated/            # sqlc output
 │   │       ├── db.go
 │   │       ├── models.go
@@ -568,11 +844,16 @@ backend/
 
 ### Data Validation
 
-- Input validation in Go handlers
-- Turn content validated via UI components (Action, Dialog blocks)
-- Character limits enforced per campaign setting
+- Input validation in Go handlers (mirrors frontend rules)
+- Post content validated server-side:
+  - Maximum length enforcement per campaign character limit preset
+  - UTF-8 validation (reject malformed sequences)
+  - HTML/script tag rejection (escape or reject `<script>`, `<img onerror>`, etc.)
+- Character limits enforced per campaign setting (1000/3000/6000/10000)
 - File uploads (avatars, scene headers) validated and processed via Supabase Storage
 - Image constraints: 20MB max, 4000x4000px max, PNG/JPG/WebP only
+
+**Note:** Server-side validation is required to prevent frontend bypass. All content validation rules must be enforced independently of the client.
 
 ### Image Handling
 
@@ -594,9 +875,10 @@ backend/
 
 - User can request account deletion
 - Account record removed from auth system
-- Campaign characters become orphaned (retain display name, avatar, turns)
-- GM can reassign orphaned characters to new players
-- Turns remain immutable—game history preserved
+- CharacterAssignments for that user are deleted (characters become orphaned)
+- Orphaned characters retain display name, avatar, and all posts
+- GM can reassign orphaned characters to new players or write them out of the story
+- Posts remain immutable—game history preserved
 - If user was GM, campaign enters paused state with GM slot available
 
 ---
@@ -649,6 +931,10 @@ supabase db push
 # Generate types
 sqlc generate                    # Go types from SQL
 supabase gen types typescript    # TypeScript types from schema
+
+# Linting
+cd frontend && bun run lint      # Run ESLint on frontend code
+cd backend && golangci-lint run  # Run golangci-lint on backend code
 ```
 
 ---
@@ -736,6 +1022,8 @@ Per-user rate limiting based on authenticated user_id from JWT. Implemented at G
 | Turn/Action Submission | 10 req/min | 3 | One action per turn + retries |
 | Scene/Campaign Creation | 5 req/min | 2 | Infrequent admin actions |
 | Image Upload | 5 req/min | 2 | Resource-heavy |
+| Compose Lock (acquire/release) | 12 req/min | 2 | Prevent lock abuse (5 sec between ops) |
+| Campaign Join | 5 req/15min per IP | 1 | Prevent invite code brute force |
 
 ### Behavior
 
@@ -777,20 +1065,31 @@ HTTP Status: `429 Too Many Requests`
 - **Platform:** GitHub Actions
 - **Trigger:** Push to main branch
 - **Steps:**
-  1. Run tests (unit + integration)
-  2. On success: auto-deploy both services
+  1. Run linters (ESLint for frontend, golangci-lint for backend)
+  2. Run tests (unit + integration)
+  3. On success: auto-deploy both services
 
 ```yaml
 name: CI/CD
 on: [push]
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Lint frontend
+        run: cd frontend && bun install && bun run lint
+      - name: Lint backend
+        uses: golangci/golangci-lint-action@v3
+        with:
+          working-directory: backend
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - run: npm test && go test ./...
   deploy:
-    needs: test
+    needs: [lint, test]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -815,11 +1114,11 @@ jobs:
 
 ### Test Coverage Priorities
 
-1. Turn mechanics and synchronization
+1. Post creation and locking mechanics
 2. Dice roll calculation
 3. Permission checks (witness visibility, GM-only routes)
-4. Scene transitions and state machine
-5. Player/GM state management
+4. Phase transitions and state machine
+5. Character assignment and orphaning
 6. Rate limiting behavior
 
 ### Running Tests

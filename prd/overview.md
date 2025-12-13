@@ -12,15 +12,15 @@ The core innovation is **eliminating metagaming through architectural design** r
 
 ### Player Engagement Balance
 
-Preventing single players from dominating the narrative while others get left behind. The structured turn system with compose locks ensures everyone gets a chance to contribute before the story moves forward. Global turn synchronization keeps all scenes moving together.
+Preventing single players from dominating the narrative while others get left behind. The structured phase system with compose locks ensures everyone gets a chance to contribute before the story moves forward. Global phase synchronization keeps all scenes moving together.
 
 ### Story Flow
 
-Keeping games moving with time gates and structured turn-taking. Async play-by-post games often stall when waiting on players—the platform provides configurable time gates that auto-advance when needed.
+Keeping games moving with time gates and structured phases. Async play-by-post games often stall when waiting on players—the platform provides configurable time gates that auto-advance when needed.
 
 ### Scene Organization
 
-Managing parallel scenes, character locations, and narrative threads. Split party scenarios, private conversations, and multiple simultaneous locations are first-class features.
+Managing parallel scenes, character locations, and narrative threads. Split party scenarios, private conversations, and multiple simultaneous locations are first-class features. Characters can only be in one scene at a time, with movement handled by the GM during GM Phase.
 
 ### Metagaming
 

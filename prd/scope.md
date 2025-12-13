@@ -7,16 +7,18 @@ What's in v1 and what's deferred.
 ### Core Features
 
 - Campaign creation and invitation system
-- Scene management (create, pause, archive)
-- Turn-based play with player windows and GM resolution
-- Sequential composing with compose locks
-- Witness-based visibility system
-- Pass mechanics (pass and hard pass)
-- Configurable time gates
+- Scene management (create, archive, delete) with 25-scene limit
+- Phase-based play (PC Phase → GM Phase)
+- Sequential composing with compose locks (fixed 10-minute timeout)
+- Witness-based visibility system (character-based)
+- Pass mechanics (Pass and Hard Pass) per-character
+- Configurable time gates (preset options, default 24h)
 - Fog of war (optional per-campaign)
-- Hidden actions (optional per-campaign)
+- Hidden posts (optional per-campaign)
 - Intent tagging and dice rolling
-- Game log with witness filtering
+- Game log with character witness filtering
+- Multi-character support per user
+- Campaign pause/resume (pauses all scenes)
 
 ### User Management
 
@@ -108,17 +110,23 @@ What's in v1 and what's deferred.
 ### Functional
 
 - A GM can create a campaign and invite players
-- Players can join via link and set up their profile
+- Players can join via link and receive character assignments
+- GM can create characters (PCs and NPCs) and assign them to users
 - GM can create scenes and place characters
-- Turn cycle functions correctly (window → turns → pass → resolution)
-- Global turn synchronization works across all scenes
-- Compose locks prevent race conditions
-- Witness system correctly filters visibility
+- Phase cycle functions correctly (PC Phase → GM Phase)
+- Global phase synchronization works across all scenes
+- Compose locks prevent race conditions (10-minute timeout)
+- Witness system correctly filters visibility (per-character)
 - Fog of war hides information appropriately
-- Time gates auto-advance when expired
+- Time gates auto-pass characters when expired (default 24h)
 - Intent-based dice rolls work with predefined system presets
+- GM must manually resolve unresolved rolls before phase transition
 - Notifications arrive for key events
-- GM can edit/delete turns for moderation
+- GM can edit/delete posts for moderation
+- Post locking works correctly (previous post locks when new post created)
+- Multi-character support works correctly (dropdown, per-character pass)
+- Scene limits enforced (25 max, warnings, auto-deletion of oldest archived)
+- GM inactivity threshold works (30-day fixed)
 
 ### Non-Functional
 
