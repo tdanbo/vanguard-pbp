@@ -4,60 +4,107 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    /* Light mode - kept minimal, app is primarily dark */
+    --background: 40 10% 96%;
+    --foreground: 20 10% 10%;
+    --card: 40 10% 98%;
+    --card-foreground: 20 10% 10%;
+    --popover: 40 10% 98%;
+    --popover-foreground: 20 10% 10%;
+    --primary: 43 50% 45%;
+    --primary-foreground: 40 10% 98%;
+    --secondary: 40 8% 90%;
+    --secondary-foreground: 20 10% 15%;
+    --muted: 40 8% 90%;
+    --muted-foreground: 20 5% 45%;
+    --accent: 43 50% 45%;
+    --accent-foreground: 40 10% 98%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 40 10% 98%;
+    --border: 40 8% 85%;
+    --input: 40 8% 85%;
+    --ring: 43 50% 45%;
+    --radius: 0.75rem;
 
     /* Vanguard-specific */
-    --gm-phase: 280 60% 50%;
-    --pc-phase: 142 76% 36%;
-    --passed: 210 40% 60%;
-    --hard-passed: 215 20% 50%;
+    --gm-phase: 280 45% 50%;
+    --pc-phase: 142 50% 40%;
+    --passed: 40 20% 50%;
+    --hard-passed: 40 10% 40%;
+
+    /* Extended palette */
+    --gold: 43 50% 57%;
+    --gold-dim: 40 44% 42%;
+    --gold-bright: 43 65% 69%;
+    --warm-brown: 30 30% 35%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    /* Background scale - warm charcoal */
+    --background: 240 6% 7%;
+    --foreground: 40 10% 96%;
 
-    /* Vanguard-specific (dark) */
-    --gm-phase: 280 60% 60%;
-    --pc-phase: 142 76% 46%;
-    --passed: 210 40% 70%;
-    --hard-passed: 215 20% 60%;
+    /* Card/elevated surfaces */
+    --card: 240 5% 10%;
+    --card-foreground: 40 10% 96%;
+
+    /* Popover */
+    --popover: 240 5% 10%;
+    --popover-foreground: 40 10% 96%;
+
+    /* Primary - Gold accent */
+    --primary: 43 50% 57%;
+    --primary-foreground: 240 6% 7%;
+
+    /* Secondary - Elevated surface */
+    --secondary: 240 4% 14%;
+    --secondary-foreground: 40 10% 90%;
+
+    /* Muted */
+    --muted: 240 4% 14%;
+    --muted-foreground: 40 5% 55%;
+
+    /* Accent - Gold */
+    --accent: 43 50% 57%;
+    --accent-foreground: 240 6% 7%;
+
+    /* Destructive - Muted red */
+    --destructive: 0 50% 35%;
+    --destructive-foreground: 40 10% 96%;
+
+    /* Borders - subtle warm */
+    --border: 240 5% 18%;
+    --input: 240 4% 14%;
+
+    /* Focus ring - gold */
+    --ring: 43 50% 57%;
+
+    /* Vanguard-specific (dark mode) */
+    --gm-phase: 280 50% 60%;
+    --pc-phase: 142 55% 50%;
+    --passed: 40 25% 60%;
+    --hard-passed: 40 15% 50%;
+
+    /* Extended palette */
+    --gold: 43 50% 57%;
+    --gold-dim: 40 44% 42%;
+    --gold-bright: 43 65% 69%;
+    --warm-brown: 30 30% 40%;
+
+    /* Transparency variants for immersive views */
+    --panel: 240 6% 7% / 0.85;
+    --panel-solid: 240 6% 7% / 0.95;
+    --overlay: 240 6% 4% / 0.7;
+
+    /* Text hierarchy */
+    --text-primary: 40 10% 96%;
+    --text-secondary: 40 5% 65%;
+    --text-muted: 40 3% 42%;
+
+    /* Semantic colors */
+    --success: 140 30% 35%;
+    --warning: 43 70% 45%;
+    --info: 210 25% 45%;
   }
 }
 
@@ -65,7 +112,167 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Force dark mode by default */
+  :root {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  /* Gold accent utilities */
+  .text-gold { color: hsl(var(--gold)); }
+  .text-gold-dim { color: hsl(var(--gold-dim)); }
+  .text-gold-bright { color: hsl(var(--gold-bright)); }
+  .bg-gold { background-color: hsl(var(--gold)); }
+  .border-gold { border-color: hsl(var(--gold)); }
+  .border-gold-dim { border-color: hsl(var(--gold-dim)); }
+  .ring-gold { --tw-ring-color: hsl(var(--gold)); }
+
+  /* Panel transparency for immersive views */
+  .bg-panel {
+    background-color: hsl(var(--panel));
+    backdrop-filter: blur(10px);
+  }
+  .bg-panel-solid {
+    background-color: hsl(var(--panel-solid));
+    backdrop-filter: blur(10px);
+  }
+
+  /* Text hierarchy utilities */
+  .text-hierarchy-primary { color: hsl(var(--text-primary)); }
+  .text-hierarchy-secondary { color: hsl(var(--text-secondary)); }
+  .text-hierarchy-muted { color: hsl(var(--text-muted)); }
+
+  /* Small caps treatment for labels */
+  .label-caps {
+    @apply text-sm font-medium tracking-wider uppercase;
+    color: hsl(var(--text-secondary));
+  }
+
+  /* Display font utility */
+  .font-display {
+    font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+  }
+
+  /* Scene title treatment */
+  .scene-title {
+    @apply font-display text-4xl font-semibold tracking-tight;
+    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
+  }
+
+  /* Character name treatment */
+  .character-name {
+    @apply font-display text-xl font-semibold;
+    color: hsl(var(--gold));
+  }
+
+  /* Card with hover lift effect */
+  .card-interactive {
+    @apply transition-all duration-200;
+  }
+  .card-interactive:hover {
+    @apply -translate-y-0.5;
+    border-color: hsl(var(--gold-dim));
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Subtle gold border for emphasis */
+  .border-emphasis {
+    border-color: hsl(var(--gold) / 0.3);
+  }
+
+  /* Glow effects */
+  .glow-gold {
+    box-shadow: 0 0 20px hsl(var(--gold) / 0.3);
+  }
+  .glow-gold-sm {
+    box-shadow: 0 0 10px hsl(var(--gold) / 0.2);
+  }
+
+  /* Portrait sizing utilities */
+  .portrait-sm {
+    @apply w-12 rounded-lg object-cover;
+    height: 3.75rem;
+    border: 1px solid hsl(var(--border));
+  }
+  .portrait-md {
+    @apply w-20 rounded-lg object-cover;
+    height: 6.25rem;
+    border: 2px solid hsl(var(--border));
+  }
+  .portrait-lg {
+    @apply rounded-xl object-cover;
+    width: 7.5rem;
+    height: 9.375rem;
+    border: 2px solid hsl(var(--border));
+  }
+}
+
+@layer utilities {
+  /* Scene header gradient overlay */
+  .scene-gradient {
+    background: linear-gradient(to bottom, transparent, hsl(var(--background)));
+  }
+
+  /* Atmospheric gradient for scenes without images */
+  .scene-atmosphere {
+    background: radial-gradient(ellipse at top, hsl(240 5% 12%), hsl(var(--background)));
+  }
+
+  /* Skeleton loading animation */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--secondary)) 25%,
+      hsl(240 4% 18%) 50%,
+      hsl(var(--secondary)) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
+  }
+
+  @keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Decorative flourish divider */
+  .flourish {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .flourish::before,
+  .flourish::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold-dim)), transparent);
+  }
+
+  /* Focus ring for gold theme */
+  .focus-gold:focus-visible {
+    outline: 2px solid hsl(var(--gold));
+    outline-offset: 2px;
+  }
+
+  /* Post sidebar gradient fade */
+  .gradient-fade-right {
+    background: linear-gradient(to right, transparent, hsl(var(--card)));
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }

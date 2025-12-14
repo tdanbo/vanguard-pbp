@@ -1,6 +1,6 @@
 ---
 name: shadcn-react
-description: React component development with shadcn/ui, Tailwind CSS, and modern patterns. Use this skill when creating UI components, building forms with react-hook-form + zod validation, implementing dialogs/modals, adding toast notifications, styling with Tailwind utilities, or composing accessible component patterns. Critical for all frontend development in the Vanguard PBP system.
+description: React component development with shadcn/ui, Tailwind CSS, and modern patterns. Use this skill when creating UI components, building forms with react-hook-form + zod validation, implementing dialogs/modals, adding toast notifications, or composing component patterns. For accessibility patterns see accessibility skill. For responsive design see responsive-design skill. For theme/colors see vanguard-theme skill.
 ---
 
 # shadcn/ui + React Development
@@ -793,74 +793,6 @@ export function DataLoader<T>({ url, children, fallback }: DataLoaderProps<T>) {
     </div>
   )}
 </DataLoader>
-```
-
-## Accessibility Patterns
-
-### Keyboard Navigation
-
-shadcn/ui components handle keyboard navigation by default, but ensure your custom components follow these patterns:
-
-```tsx
-// Keyboard-accessible custom button
-export function CustomButton({ onClick, children }: { onClick: () => void, children: React.ReactNode }) {
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onClick()
-        }
-      }}
-      className="cursor-pointer rounded-md p-2 hover:bg-accent"
-    >
-      {children}
-    </div>
-  )
-}
-```
-
-### Focus Management
-
-```tsx
-import { useRef, useEffect } from "react"
-
-export function AutoFocusInput() {
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
-
-  return <Input ref={inputRef} placeholder="Auto-focused input" />
-}
-
-// Focus trap in dialogs (handled by shadcn/ui Dialog automatically)
-<Dialog>
-  <DialogContent>
-    {/* Focus is automatically trapped within this dialog */}
-  </DialogContent>
-</Dialog>
-```
-
-### ARIA Labels
-
-```tsx
-// Icon-only buttons need labels
-<Button variant="ghost" size="icon" aria-label="Delete post">
-  <TrashIcon className="h-4 w-4" />
-</Button>
-
-// Status indicators
-<div role="status" aria-live="polite">
-  {isLoading ? "Loading..." : "Content loaded"}
-</div>
-
-// Screen reader only text
-<span className="sr-only">Loading content</span>
 ```
 
 ## Loading States and Skeletons

@@ -981,3 +981,413 @@ const CampaignDashboard: React.FC<{ campaignId: string }> = ({ campaignId }) => 
 - Verify compose:start event does not include characterId or userId
 - Ensure UI shows generic "Another player is posting" message
 - Never expose character/user info in broadcast payloads for compose events
+
+## UI Components
+
+### ComposeLockTimerBar Component
+
+Primary display of remaining compose lock time in composer toolbar:
+
+```tsx
+interface ComposeLockTimerBarProps {
+  remainingSeconds: number;
+  totalSeconds?: number; // Default 600 (10 min)
+}
+
+function ComposeLockTimerBar({
+  remainingSeconds,
+  totalSeconds = 600,
+}: ComposeLockTimerBarProps) {
+  const percentage = (remainingSeconds / totalSeconds) * 100;
+  const isWarning = remainingSeconds < 120; // < 2 minutes
+
+  // Format as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="w-20 h-1 rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                "h-full transition-all duration-1000",
+                isWarning ? "bg-destructive" : "bg-primary"
+              )}
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <span className="font-mono">{formatTime(remainingSeconds)}</span>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+```
+
+**Dimensions:** `w-20` (80px width), `h-1` (4px height)
+**States:**
+- Normal (≥2min): `bg-primary` fill draining from right
+- Warning (<2min): `bg-destructive` fill (red)
+- Expired: Empty bar + toast notification
+
+### LockButton Component
+
+Toggle button for acquiring/releasing compose lock:
+
+```tsx
+interface LockButtonProps {
+  hasLock: boolean;
+  isAcquiring: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}
+
+function LockButton({ hasLock, isAcquiring, onToggle, disabled }: LockButtonProps) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={onToggle}
+      disabled={disabled || isAcquiring}
+      aria-label={hasLock ? 'Release compose lock' : 'Acquire compose lock'}
+    >
+      {isAcquiring ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : hasLock ? (
+        <Unlock className="h-4 w-4" />
+      ) : (
+        <Lock className="h-4 w-4" />
+      )}
+    </Button>
+  );
+}
+```
+
+**Icon States:**
+- `Lock`: No lock held (click to acquire)
+- `Loader2` (spinning): Acquiring lock
+- `Unlock`: Lock held (click to release)
+
+### LockBanner Component
+
+Alert shown when another player has compose lock:
+
+```tsx
+interface LockBannerProps {
+  characterName: string; // Only shown if not hidden post
+  isHidden?: boolean;
+}
+
+function LockBanner({ characterName, isHidden }: LockBannerProps) {
+  return (
+    <Alert className="mb-4">
+      <Lock className="h-4 w-4" />
+      <AlertTitle>Compose lock active</AlertTitle>
+      <AlertDescription>
+        {isHidden
+          ? 'Another player is composing a post...'
+          : `${characterName} is composing a post...`}
+      </AlertDescription>
+    </Alert>
+  );
+}
+```
+
+**Security:** When `isHidden` is true, never reveal character identity to prevent witness list leakage.
+
+### TypingIndicator Component
+
+Shows who is currently typing in the scene:
+
+```tsx
+interface TypingIndicatorProps {
+  typingUsers: Array<{ characterName: string }>;
+}
+
+function TypingIndicator({ typingUsers }: TypingIndicatorProps) {
+  if (typingUsers.length === 0) return null;
+
+  const getMessage = () => {
+    if (typingUsers.length === 1) {
+      return `${typingUsers[0].characterName} is typing...`;
+    }
+    if (typingUsers.length === 2) {
+      return `${typingUsers[0].characterName} and ${typingUsers[1].characterName} are typing...`;
+    }
+    return `${typingUsers.length} people are typing...`;
+  };
+
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+      {/* Bouncing dots animation */}
+      <div className="flex gap-1">
+        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
+        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
+        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
+      </div>
+      <span>{getMessage()}</span>
+    </div>
+  );
+}
+```
+
+**Position:** Bottom of post list, above compose button.
+
+**Message formats:**
+- 1 user: "Doravar is typing..."
+- 2 users: "Doravar and Elara are typing..."
+- 3+ users: "3 people are typing..."
+
+### DraftSaveIndicator Component
+
+Shows when draft is being saved:
+
+```tsx
+interface DraftSaveIndicatorProps {
+  isSaving: boolean;
+  lastSaved?: Date;
+}
+
+function DraftSaveIndicator({ isSaving, lastSaved }: DraftSaveIndicatorProps) {
+  if (isSaving) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Save className="h-3 w-3" />
+        <span>Saving...</span>
+      </div>
+    );
+  }
+
+  if (lastSaved) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Check className="h-3 w-3" />
+        <span>Saved</span>
+      </div>
+    );
+  }
+
+  return null;
+}
+```
+
+**Position:** Composer header, next to character name.
+
+### ConnectionStatus Component
+
+Shows WebSocket connection state:
+
+```tsx
+type ConnectionState = 'connected' | 'disconnected' | 'reconnecting';
+
+interface ConnectionStatusProps {
+  status: ConnectionState;
+}
+
+function ConnectionStatus({ status }: ConnectionStatusProps) {
+  if (status === 'connected') {
+    return null; // No indicator when connected
+  }
+
+  if (status === 'reconnecting') {
+    return (
+      <Alert>
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <AlertDescription>Reconnecting...</AlertDescription>
+      </Alert>
+    );
+  }
+
+  return (
+    <Alert variant="destructive">
+      <WifiOff className="h-4 w-4" />
+      <AlertTitle>Connection lost</AlertTitle>
+      <AlertDescription>
+        Trying to reconnect. Your changes will be saved when connection is restored.
+      </AlertDescription>
+    </Alert>
+  );
+}
+```
+
+**States:**
+- Connected: No indicator (clean UI)
+- Disconnected: Red alert with WifiOff icon
+- Reconnecting: Default alert with spinner
+
+### ComposerToolbar Component
+
+Combines lock controls and timer:
+
+```tsx
+interface ComposerToolbarProps {
+  hasLock: boolean;
+  isAcquiring: boolean;
+  remainingSeconds: number;
+  onLockToggle: () => void;
+  onSubmit: () => void;
+  canSubmit: boolean;
+}
+
+function ComposerToolbar({
+  hasLock,
+  isAcquiring,
+  remainingSeconds,
+  onLockToggle,
+  onSubmit,
+  canSubmit,
+}: ComposerToolbarProps) {
+  return (
+    <div className="flex items-center justify-end gap-2 border-t border-border/50 pt-2">
+      <div className="flex items-center gap-2">
+        <LockButton
+          hasLock={hasLock}
+          isAcquiring={isAcquiring}
+          onToggle={onLockToggle}
+        />
+        {hasLock && (
+          <ComposeLockTimerBar remainingSeconds={remainingSeconds} />
+        )}
+      </div>
+      <Button
+        size="icon"
+        onClick={onSubmit}
+        disabled={!hasLock || !canSubmit}
+      >
+        <Send className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+```
+
+### Timing Constants
+
+```typescript
+// Compose lock timing
+const COMPOSE_LOCK_DURATION = 10 * 60 * 1000;  // 10 minutes
+const COMPOSE_LOCK_HEARTBEAT = 30 * 1000;      // 30 seconds
+const COMPOSE_LOCK_WARNING = 2 * 60 * 1000;    // 2 minutes (warning threshold)
+
+// Typing indicator timing
+const TYPING_TIMEOUT = 5 * 1000;               // 5 seconds until cleared
+const TYPING_CLEANUP_INTERVAL = 5 * 1000;      // Check every 5 seconds
+const TYPING_STALE_THRESHOLD = 10 * 1000;      // 10 seconds = stale
+```
+
+### Icons Used
+
+```tsx
+import {
+  Lock,        // No lock held
+  Unlock,      // Lock held (release)
+  Loader2,     // Loading/acquiring/reconnecting
+  AlertCircle, // Error states
+  Save,        // Draft save indicator
+  Check,       // Saved confirmation
+  WifiOff,     // Disconnected
+  Clock,       // Time-related
+  Send,        // Submit post
+} from "lucide-react";
+```
+
+### useComposeLock Hook Pattern
+
+```tsx
+function useComposeLock(sceneId: string) {
+  const [hasLock, setHasLock] = useState(false);
+  const [isAcquiring, setIsAcquiring] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const heartbeatRef = useRef<NodeJS.Timeout>();
+
+  const acquireLock = async () => {
+    setIsAcquiring(true);
+    try {
+      const session = await api.acquireComposeLock(sceneId);
+      setHasLock(true);
+      setRemainingSeconds(600); // 10 minutes
+      startHeartbeat();
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Lock unavailable',
+        description: 'Another player is currently composing.',
+      });
+    } finally {
+      setIsAcquiring(false);
+    }
+  };
+
+  const releaseLock = async () => {
+    stopHeartbeat();
+    await api.releaseComposeLock(sceneId);
+    setHasLock(false);
+    setRemainingSeconds(0);
+  };
+
+  const startHeartbeat = () => {
+    heartbeatRef.current = setInterval(async () => {
+      try {
+        await api.heartbeatComposeLock(sceneId);
+        setRemainingSeconds(prev => Math.max(0, prev - 30));
+      } catch {
+        // Lock expired
+        setHasLock(false);
+        toast({
+          variant: 'destructive',
+          title: 'Lock expired',
+          description: 'Your compose lock has expired.',
+        });
+      }
+    }, 30000);
+  };
+
+  const stopHeartbeat = () => {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+    }
+  };
+
+  // Countdown timer
+  useEffect(() => {
+    if (!hasLock) return;
+
+    const timer = setInterval(() => {
+      setRemainingSeconds(prev => {
+        if (prev <= 1) {
+          releaseLock();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [hasLock]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hasLock) {
+        releaseLock();
+      }
+    };
+  }, []);
+
+  return {
+    hasLock,
+    isAcquiring,
+    remainingSeconds,
+    acquireLock,
+    releaseLock,
+    toggleLock: () => hasLock ? releaseLock() : acquireLock(),
+  };
+}
+```

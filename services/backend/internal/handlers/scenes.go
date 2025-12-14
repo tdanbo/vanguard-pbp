@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tdanbo/vanguard-pbp/services/backend/internal/database"
+	"github.com/tdanbo/vanguard-pbp/services/backend/internal/database/generated"
 	"github.com/tdanbo/vanguard-pbp/services/backend/internal/middleware"
 	"github.com/tdanbo/vanguard-pbp/services/backend/internal/models"
 	"github.com/tdanbo/vanguard-pbp/services/backend/internal/service"
@@ -243,6 +244,8 @@ func UnarchiveScene(db *database.DB) gin.HandlerFunc {
 
 // AddCharacterToScene adds a character to a scene.
 func AddCharacterToScene(db *database.DB) gin.HandlerFunc {
+	queries := generated.New(db.Pool)
+
 	return func(c *gin.Context) {
 		userIDStr, ok := middleware.GetUserID(c)
 		if !ok {
@@ -278,12 +281,19 @@ func AddCharacterToScene(db *database.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Broadcast character joined scene
+		if sceneData, sErr := queries.GetScene(c.Request.Context(), sceneID); sErr == nil {
+			BroadcastCharacterJoinedScene(c, sceneID, sceneData.CampaignID, characterID)
+		}
+
 		c.JSON(http.StatusOK, scene)
 	}
 }
 
 // RemoveCharacterFromScene removes a character from a scene.
 func RemoveCharacterFromScene(db *database.DB) gin.HandlerFunc {
+	queries := generated.New(db.Pool)
+
 	return func(c *gin.Context) {
 		userIDStr, ok := middleware.GetUserID(c)
 		if !ok {
@@ -305,6 +315,9 @@ func RemoveCharacterFromScene(db *database.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Get campaign ID before removing character
+		sceneData, sceneErr := queries.GetScene(c.Request.Context(), sceneID)
+
 		userID := parseUUID(userIDStr)
 		svc := service.NewSceneService(db.Pool)
 
@@ -317,6 +330,11 @@ func RemoveCharacterFromScene(db *database.DB) gin.HandlerFunc {
 		if err != nil {
 			handleSceneServiceError(c, err)
 			return
+		}
+
+		// Broadcast character left scene
+		if sceneErr == nil {
+			BroadcastCharacterLeftScene(c, sceneID, sceneData.CampaignID, characterID)
 		}
 
 		c.JSON(http.StatusOK, scene)

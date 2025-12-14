@@ -115,3 +115,17 @@ SET
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: GetUserCharactersInScene :many
+SELECT
+    c.*,
+    ca.user_id AS assigned_user_id,
+    ca.assigned_at
+FROM characters c
+INNER JOIN character_assignments ca ON c.id = ca.character_id
+WHERE c.id = ANY(
+    SELECT unnest(character_ids) FROM scenes WHERE scenes.id = $1
+)
+AND ca.user_id = $2
+AND c.is_archived = false
+ORDER BY c.display_name;

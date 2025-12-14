@@ -106,6 +106,7 @@ func setupRouter(
 	return router
 }
 
+//nolint:funlen // Route registration requires many statements.
 func registerAPIRoutes(api *gin.RouterGroup, db *database.DB, imageHandler *handlers.ImageHandler) {
 	// User routes
 	api.GET("/me", handlers.GetCurrentUser())
@@ -164,4 +165,71 @@ func registerAPIRoutes(api *gin.RouterGroup, db *database.DB, imageHandler *hand
 	api.DELETE("/campaigns/:id/characters/:characterId/avatar", imageHandler.DeleteAvatar)
 	api.POST("/campaigns/:id/scenes/:sceneId/header", imageHandler.UploadSceneHeader)
 	api.DELETE("/campaigns/:id/scenes/:sceneId/header", imageHandler.DeleteSceneHeader)
+
+	// Post routes
+	api.GET("/campaigns/:id/scenes/:sceneId/posts", handlers.ListScenePosts(db))
+	api.POST("/campaigns/:id/scenes/:sceneId/posts", handlers.CreatePost(db))
+	api.GET("/campaigns/:id/scenes/:sceneId/posts/hidden", handlers.ListHiddenPosts(db))
+	api.GET("/posts/:postId", handlers.GetPost(db))
+	api.PATCH("/posts/:postId", handlers.UpdatePost(db))
+	api.DELETE("/posts/:postId", handlers.DeletePost(db))
+	api.POST("/posts/:postId/submit", handlers.SubmitPost(db))
+	api.POST("/posts/:postId/unhide", handlers.UnhidePost(db))
+
+	// Compose lock routes
+	api.POST("/compose/acquire", handlers.AcquireComposeLock(db))
+	api.POST("/compose/heartbeat", handlers.HeartbeatComposeLock(db))
+	api.DELETE("/compose/:lockId", handlers.ReleaseComposeLock(db))
+	api.DELETE("/compose/:lockId/force", handlers.ForceReleaseComposeLock(db))
+	api.PATCH("/compose/:lockId/hidden", handlers.UpdateComposeLockHidden(db))
+	api.GET("/campaigns/:id/scenes/:sceneId/compose-locks", handlers.GetSceneComposeLocks(db))
+
+	// Draft routes
+	api.POST("/drafts", handlers.SaveDraft(db))
+	api.GET("/drafts", handlers.ListUserDrafts(db))
+	api.GET("/drafts/:sceneId/:characterId", handlers.GetDraft(db))
+	api.DELETE("/drafts/:sceneId/:characterId", handlers.DeleteDraft(db))
+
+	// Phase management routes
+	api.GET("/campaigns/:id/phase", handlers.GetPhaseStatus(db))
+	api.POST("/campaigns/:id/phase/transition", handlers.TransitionPhase(db))
+	api.POST("/campaigns/:id/phase/force-transition", handlers.ForceTransitionPhase(db))
+
+	// Pass management routes
+	api.GET("/campaigns/:id/pass", handlers.GetCampaignPassSummary(db))
+	api.GET("/campaigns/:id/scenes/:sceneId/pass", handlers.GetScenePassStates(db))
+	api.POST("/campaigns/:id/scenes/:sceneId/characters/:characterId/pass", handlers.SetPass(db))
+	api.DELETE("/campaigns/:id/scenes/:sceneId/characters/:characterId/pass", handlers.ClearPass(db))
+
+	// Dice system routes
+	api.GET("/dice/presets", handlers.GetAvailablePresets())
+	api.GET("/dice/types", handlers.GetValidDiceTypes())
+
+	// Roll routes
+	api.POST("/rolls", handlers.CreateRoll(db))
+	api.GET("/rolls/:rollId", handlers.GetRoll(db))
+	api.POST("/rolls/:rollId/override-intention", handlers.OverrideRollIntention(db))
+	api.POST("/rolls/:rollId/resolve", handlers.ManuallyResolveRoll(db))
+	api.POST("/rolls/:rollId/invalidate", handlers.InvalidateRoll(db))
+	api.GET("/posts/:postId/rolls", handlers.GetRollsByPost(db))
+	api.GET("/characters/:characterId/rolls/pending", handlers.GetPendingRollsForCharacter(db))
+	api.GET("/campaigns/:id/rolls/unresolved", handlers.GetUnresolvedRollsInCampaign(db))
+	api.GET("/scenes/:sceneId/rolls", handlers.GetRollsInScene(db))
+
+	// Notification routes
+	notificationHandler := handlers.NewNotificationHandler(db)
+	api.GET("/notifications", notificationHandler.GetNotifications())
+	api.GET("/notifications/unread", notificationHandler.GetUnreadNotifications())
+	api.GET("/notifications/unread/count", notificationHandler.GetUnreadCount())
+	api.GET("/campaigns/:id/notifications/unread/count", notificationHandler.GetUnreadCountByCampaign())
+	api.POST("/notifications/:notificationId/read", notificationHandler.MarkAsRead())
+	api.POST("/notifications/read-all", notificationHandler.MarkAllAsRead())
+	api.DELETE("/notifications/:notificationId", notificationHandler.DeleteNotification())
+	api.GET("/notifications/queued", notificationHandler.GetQueuedNotifications())
+
+	// Notification preferences routes
+	api.GET("/notification-preferences", notificationHandler.GetNotificationPreferences())
+	api.PUT("/notification-preferences", notificationHandler.UpdateNotificationPreferences())
+	api.GET("/quiet-hours", notificationHandler.GetQuietHours())
+	api.PUT("/quiet-hours", notificationHandler.UpdateQuietHours())
 }

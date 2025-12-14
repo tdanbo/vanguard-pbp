@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useCampaignStore } from '@/stores/campaignStore'
+import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
 import {
   Dialog,
   DialogContent,
@@ -34,17 +36,25 @@ import {
   UserPlus,
   UserMinus,
   BookOpen,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
 } from 'lucide-react'
-import type { Scene, Character, CreateSceneRequest, CampaignPhase } from '@/types'
+import { SceneHeaderUploader } from '@/components/image/SceneHeaderUploader'
+import { PostList } from '@/components/posts'
+import { PassButton } from '@/components/phase'
+import type { Scene, Character, CreateSceneRequest, CampaignPhase, CampaignSettings, PassState } from '@/types'
 
 interface SceneManagerProps {
   campaignId: string
   isGM: boolean
   currentPhase: CampaignPhase
+  settings: CampaignSettings
 }
 
-export function SceneManager({ campaignId, isGM, currentPhase }: SceneManagerProps) {
+export function SceneManager({ campaignId, isGM, currentPhase, settings }: SceneManagerProps) {
   const { toast } = useToast()
+  const { user } = useAuthStore()
   const {
     scenes,
     sceneWarning,
@@ -315,7 +325,11 @@ export function SceneManager({ campaignId, isGM, currentPhase }: SceneManagerPro
                 key={scene.id}
                 scene={scene}
                 characters={characters}
+                campaignId={campaignId}
+                currentUserId={user?.id || ''}
                 isGM={isGM}
+                currentPhase={currentPhase}
+                settings={settings}
                 canMoveCharacters={canMoveCharacters}
                 onEdit={() => openEditDialog(scene)}
                 onArchive={() => handleArchive(scene)}
@@ -329,12 +343,35 @@ export function SceneManager({ campaignId, isGM, currentPhase }: SceneManagerPro
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Scene</DialogTitle>
-            <DialogDescription>Update scene details.</DialogDescription>
+            <DialogDescription>Update scene details and header image.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {selectedScene && (
+              <>
+                <div className="space-y-2">
+                  <Label>Header Image</Label>
+                  <SceneHeaderUploader
+                    campaignId={campaignId}
+                    sceneId={selectedScene.id}
+                    currentUrl={selectedScene.header_image_url}
+                    onUploadComplete={(url) => {
+                      const updatedScene = { ...selectedScene, header_image_url: url }
+                      setSelectedScene(updatedScene)
+                      fetchScenes(campaignId)
+                    }}
+                    onDeleteComplete={() => {
+                      const updatedScene = { ...selectedScene, header_image_url: null }
+                      setSelectedScene(updatedScene)
+                      fetchScenes(campaignId)
+                    }}
+                  />
+                </div>
+                <Separator />
+              </>
+            )}
             <div className="space-y-2">
               <Label htmlFor="editSceneTitle">Title</Label>
               <Input
@@ -415,7 +452,11 @@ export function SceneManager({ campaignId, isGM, currentPhase }: SceneManagerPro
 interface SceneCardProps {
   scene: Scene
   characters: Character[]
+  campaignId: string
+  currentUserId: string
   isGM: boolean
+  currentPhase: CampaignPhase
+  settings: CampaignSettings
   canMoveCharacters: boolean
   onEdit: () => void
   onArchive: () => void
@@ -426,13 +467,18 @@ interface SceneCardProps {
 function SceneCard({
   scene,
   characters,
+  campaignId,
+  currentUserId,
   isGM,
+  currentPhase,
+  settings,
   canMoveCharacters,
   onEdit,
   onArchive,
   onAddCharacter,
   onRemoveCharacter,
 }: SceneCardProps) {
+  const [showPosts, setShowPosts] = useState(false)
   const sceneCharacters = characters.filter((c) => scene.character_ids.includes(c.id))
 
   return (
@@ -493,27 +539,80 @@ function SceneCard({
           <p className="text-sm text-muted-foreground">No characters in this scene</p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {sceneCharacters.map((character) => (
-              <div key={character.id} className="flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-sm">
-                <span>{character.display_name}</span>
-                <Badge variant="outline" className="ml-1 text-xs">
-                  {character.character_type.toUpperCase()}
-                </Badge>
-                {canMoveCharacters && !scene.is_archived && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-4 w-4 p-0 ml-1"
-                    onClick={() => onRemoveCharacter(character.id)}
-                  >
-                    <UserMinus className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            ))}
+            {sceneCharacters.map((character) => {
+              const passState = (scene.pass_states?.[character.id] || 'none') as PassState
+              const isOwner = character.assigned_user_id === currentUserId
+
+              return (
+                <div key={character.id} className="flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-sm">
+                  <span>{character.display_name}</span>
+                  <Badge variant="outline" className="ml-1 text-xs">
+                    {character.character_type.toUpperCase()}
+                  </Badge>
+                  {currentPhase === 'pc_phase' && !scene.is_archived && (
+                    <PassButton
+                      campaignId={campaignId}
+                      sceneId={scene.id}
+                      characterId={character.id}
+                      currentState={passState}
+                      characterName={character.display_name}
+                      isOwner={isOwner}
+                      isGM={isGM}
+                      isPCPhase={currentPhase === 'pc_phase'}
+                      className="ml-1"
+                    />
+                  )}
+                  {canMoveCharacters && !scene.is_archived && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 ml-1"
+                      onClick={() => onRemoveCharacter(character.id)}
+                    >
+                      <UserMinus className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
+
+      {/* Posts toggle */}
+      {!scene.is_archived && (
+        <div className="mt-4 pt-4 border-t">
+          <Button
+            variant="ghost"
+            className="w-full justify-between"
+            onClick={() => setShowPosts(!showPosts)}
+          >
+            <span className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Posts
+            </span>
+            {showPosts ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+
+          {showPosts && (
+            <div className="mt-4">
+              <PostList
+                campaignId={campaignId}
+                sceneId={scene.id}
+                characters={characters}
+                currentUserId={currentUserId}
+                isGM={isGM}
+                currentPhase={currentPhase}
+                settings={settings}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

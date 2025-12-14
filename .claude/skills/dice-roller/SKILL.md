@@ -967,3 +967,467 @@ async function resolveRollAsGM(
 - Client-side manipulation attempts (all rejected)
 - Audit trail completeness (all rolls logged)
 - Idempotency (duplicate submissions handled correctly)
+
+## UI Components
+
+### Status Colors
+
+Roll states use consistent color coding:
+
+```tsx
+const rollStatusStyles = {
+  pending: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
+  completed: 'bg-green-500/10 text-green-600 border-green-500/20',
+  invalidated: 'bg-red-500/10 text-red-600 border-red-500/20',
+};
+
+// Override warning uses amber
+const overrideWarning = 'text-amber-500';
+
+// Modifier display colors
+const modifierPositive = 'text-green-600';
+const modifierNegative = 'text-red-600';
+```
+
+### RollBadge Component
+
+Displayed on post cards in upper-right corner. Shows roll intention and result.
+
+```tsx
+interface RollBadgeProps {
+  intention?: string;
+  roll?: Roll;
+  onClick?: () => void;
+  className?: string;
+}
+
+function RollBadge({ intention, roll, onClick, className }: RollBadgeProps) {
+  // No roll or intention - don't render
+  if (!intention && !roll) return null;
+
+  const statusStyles = {
+    pending: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
+    completed: 'bg-green-500/10 text-green-600 border-green-500/20',
+    invalidated: 'bg-red-500/10 text-red-600 border-red-500/20',
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      className={cn(
+        'gap-1',
+        roll && statusStyles[roll.status],
+        className
+      )}
+    >
+      <Dices className="h-3 w-3" />
+      <span>{intention || roll?.intention}</span>
+      {roll?.status === 'completed' && roll.total !== null && (
+        <span className="font-bold">: {roll.total}</span>
+      )}
+      {roll?.wasOverridden && (
+        <AlertTriangle className="h-3 w-3 text-amber-500" />
+      )}
+    </Button>
+  );
+}
+
+// Position on post card
+<div className="relative p-4">
+  <RollBadge
+    intention={post.intention}
+    roll={post.roll}
+    onClick={() => openRollModal(post.id)}
+    className="absolute top-4 right-4"
+  />
+  {/* Post content */}
+</div>
+```
+
+**Badge States:**
+- **No intent**: Not rendered (hidden)
+- **Intent selected**: Shows intention name, no status color
+- **GM requested**: Shows "!" indicator, yellow styling
+- **Pending**: Yellow styling with intention
+- **Completed**: Green styling with intention and result (bold total)
+- **Invalidated**: Red styling with strikethrough
+
+### RollForm Component
+
+Three-column form for roll submission:
+
+```tsx
+interface RollFormProps {
+  intentions: Intention[];
+  diceType: DiceType;
+  onSubmit: (data: RollFormData) => void;
+  isLoading?: boolean;
+}
+
+function RollForm({ intentions, diceType, onSubmit, isLoading }: RollFormProps) {
+  const form = useForm<RollFormData>({
+    resolver: zodResolver(rollSchema),
+    defaultValues: {
+      intention: '',
+      diceCount: 1,
+      modifier: 0,
+    },
+  });
+
+  const watchedValues = form.watch();
+  const livePreview = `${watchedValues.diceCount}${diceType}${
+    watchedValues.modifier >= 0 ? '+' : ''
+  }${watchedValues.modifier}`;
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* Intention Selector */}
+        <FormField
+          control={form.control}
+          name="intention"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Intention</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select intention..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {intentions.map(intent => (
+                    <SelectItem key={intent.id} value={intent.id}>
+                      {intent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Dice Count, Type, Modifier - Three columns */}
+        <div className="grid grid-cols-3 gap-3">
+          <FormField
+            control={form.control}
+            name="diceCount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Dice</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    {...field}
+                    onChange={e => field.onChange(parseInt(e.target.value))}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <div>
+            <FormLabel>Type</FormLabel>
+            <div className="h-10 flex items-center px-3 rounded-md border bg-muted text-muted-foreground">
+              {diceType}
+            </div>
+          </div>
+
+          <FormField
+            control={form.control}
+            name="modifier"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Modifier</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={-100}
+                    max={100}
+                    {...field}
+                    onChange={e => field.onChange(parseInt(e.target.value))}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Live Preview */}
+        <div className="text-sm text-muted-foreground text-center py-2 border rounded-md bg-muted/50">
+          Rolling: <span className="font-mono font-semibold">{livePreview}</span>
+        </div>
+
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Roll Dice
+        </Button>
+      </form>
+    </Form>
+  );
+}
+```
+
+### RollCard Component
+
+For GM's pending rolls dashboard:
+
+```tsx
+interface RollCardProps {
+  roll: PendingRoll;
+  onResolve: (rollId: string) => void;
+  onOverride: (rollId: string) => void;
+  onInvalidate: (rollId: string) => void;
+}
+
+function RollCard({ roll, onResolve, onOverride, onInvalidate }: RollCardProps) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-md bg-yellow-500/10">
+            <Dices className="h-5 w-5 text-yellow-600" />
+          </div>
+          <div>
+            <p className="font-semibold">{roll.characterName}</p>
+            <p className="text-sm text-muted-foreground">{roll.intention}</p>
+          </div>
+        </div>
+
+        <div className="text-right text-sm text-muted-foreground">
+          <p>{roll.sceneName}</p>
+          <p className="font-mono">{roll.diceCount}{roll.diceType}+{roll.modifier}</p>
+        </div>
+      </div>
+
+      {roll.wasOverridden && (
+        <div className="mt-2 flex items-center gap-1 text-sm text-amber-500">
+          <AlertTriangle className="h-3 w-3" />
+          <span>Overridden from: {roll.originalIntention}</span>
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-4">
+        <Button size="sm" variant="outline" onClick={() => onOverride(roll.id)}>
+          <Edit className="h-3 w-3 mr-1" />
+          Override
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => onResolve(roll.id)}>
+          <Check className="h-3 w-3 mr-1" />
+          Resolve
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => onInvalidate(roll.id)}>
+          <X className="h-3 w-3 mr-1" />
+          Invalidate
+        </Button>
+      </div>
+    </Card>
+  );
+}
+```
+
+### RollDisplay Component
+
+Shows completed roll result:
+
+```tsx
+interface RollDisplayProps {
+  roll: Roll;
+  mode: 'compact' | 'full';
+}
+
+function RollDisplay({ roll, mode }: RollDisplayProps) {
+  if (mode === 'compact') {
+    return (
+      <Badge variant="outline" className={rollStatusStyles[roll.status]}>
+        <Dices className="h-3 w-3 mr-1" />
+        {roll.intention}: {roll.total}
+      </Badge>
+    );
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <Badge className={rollStatusStyles[roll.status]}>
+          {roll.status.charAt(0).toUpperCase() + roll.status.slice(1)}
+        </Badge>
+        <span className="text-sm text-muted-foreground">
+          {formatDate(roll.completedAt)}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Character</span>
+          <span className="font-medium">{roll.characterName}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Intention</span>
+          <span className="font-medium">{roll.intention}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Roll</span>
+          <span className="font-mono">
+            {roll.diceCount}{roll.diceType}
+            <span className={roll.modifier >= 0 ? modifierPositive : modifierNegative}>
+              {roll.modifier >= 0 ? '+' : ''}{roll.modifier}
+            </span>
+          </span>
+        </div>
+        <Separator />
+        <div className="flex justify-between items-center">
+          <span className="text-muted-foreground">Result</span>
+          <span className="text-2xl font-bold">{roll.total}</span>
+        </div>
+        {roll.diceResults.length > 1 && (
+          <div className="text-xs text-muted-foreground text-center">
+            Individual rolls: [{roll.diceResults.join(', ')}]
+          </div>
+        )}
+      </div>
+
+      {roll.wasOverridden && (
+        <div className="mt-3 pt-3 border-t flex items-center gap-1 text-sm text-amber-500">
+          <AlertTriangle className="h-3 w-3" />
+          <span>Originally: {roll.originalIntention}</span>
+        </div>
+      )}
+    </Card>
+  );
+}
+```
+
+### RollModal Component
+
+Dialog wrapper for roll interactions:
+
+```tsx
+interface RollModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  post: Post;
+  roll?: Roll;
+  intentions: Intention[];
+  diceType: DiceType;
+}
+
+function RollModal({ open, onOpenChange, post, roll, intentions, diceType }: RollModalProps) {
+  const hasRoll = !!roll;
+  const isCompleted = roll?.status === 'completed';
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {isCompleted ? 'Roll Result' : hasRoll ? 'Complete Roll' : 'Add Roll'}
+          </DialogTitle>
+          <DialogDescription>
+            {isCompleted
+              ? `${roll.intention} roll for ${post.characterName}`
+              : 'Select intention and modifier for your roll'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isCompleted ? (
+          <RollDisplay roll={roll} mode="full" />
+        ) : (
+          <RollForm
+            intentions={intentions}
+            diceType={diceType}
+            onSubmit={handleSubmit}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+### UnresolvedRollsDashboard Component
+
+GM view of all pending rolls:
+
+```tsx
+function UnresolvedRollsDashboard({ campaignId }: { campaignId: string }) {
+  const { data: pendingRolls, isLoading } = usePendingRolls(campaignId);
+  const count = pendingRolls?.length ?? 0;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2">
+          <Dices className="h-5 w-5" />
+          Pending Rolls
+        </CardTitle>
+        {count > 0 && (
+          <Badge className="bg-yellow-500/10 text-yellow-600">
+            {count}
+          </Badge>
+        )}
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+          </div>
+        ) : count === 0 ? (
+          <div className="text-center py-6 text-muted-foreground">
+            <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-600" />
+            <p>No pending rolls</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendingRolls.map(roll => (
+              <RollCard
+                key={roll.id}
+                roll={roll}
+                onResolve={handleResolve}
+                onOverride={handleOverride}
+                onInvalidate={handleInvalidate}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+### PendingRollsBadge Component
+
+For navigation/header display:
+
+```tsx
+function PendingRollsBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+
+  return (
+    <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
+      <Dices className="h-3 w-3 mr-1" />
+      {count}
+    </Badge>
+  );
+}
+```
+
+### Icons Used
+
+```tsx
+import {
+  Dices,           // Roll indicator
+  Check,           // Resolve action
+  X,               // Invalidate action
+  Edit,            // Override action
+  AlertTriangle,   // Override warning
+  AlertCircle,     // Error states
+  Loader2,         // Loading spinner
+  CheckCircle2,    // Success/empty state
+} from "lucide-react";
+```

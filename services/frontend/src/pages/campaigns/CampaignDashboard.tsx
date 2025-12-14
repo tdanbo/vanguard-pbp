@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Separator } from '@/components/ui/separator'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +20,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import {
-  ArrowLeft,
   Crown,
   Users,
   Settings,
@@ -30,14 +30,34 @@ import {
   LinkIcon,
   UserMinus,
   LogOut,
-  Clock,
   User,
   BookOpen,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import type { CampaignMember, InviteLink } from '@/types'
+import type { CampaignMember, InviteLink, CreateSceneRequest } from '@/types'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { PlusCircle, Eye, EyeOff } from 'lucide-react'
+import { ManagementLayout } from '@/components/layout'
+import { CampaignHeader, SceneCardsGrid } from '@/components/campaign'
 import { CharacterManager } from '@/components/character/CharacterManager'
-import { SceneManager } from '@/components/scene/SceneManager'
+import { StorageIndicator } from '@/components/image/StorageIndicator'
+import { EmptyState } from '@/components/ui/empty-state'
+import {
+  PhaseIndicator,
+  PhaseTransitionButton,
+  TimeGateInfo,
+  CampaignPassOverview,
+} from '@/components/phase'
 
 export default function CampaignDashboard() {
   const { id } = useParams<{ id: string }>()
@@ -47,10 +67,14 @@ export default function CampaignDashboard() {
     currentCampaign,
     members,
     invites,
+    scenes,
+    phaseStatus,
     loadingCampaign,
     fetchCampaign,
     fetchMembers,
     fetchInvites,
+    fetchScenes,
+    fetchPhaseStatus,
     pauseCampaign,
     resumeCampaign,
     deleteCampaign,
@@ -59,6 +83,7 @@ export default function CampaignDashboard() {
     removeMember,
     leaveCampaign,
     transferGm,
+    createScene,
   } = useCampaignStore()
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -67,25 +92,35 @@ export default function CampaignDashboard() {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [selectedMemberForTransfer, setSelectedMemberForTransfer] = useState<string | null>(null)
 
+  // Scene state
+  const [showArchivedScenes, setShowArchivedScenes] = useState(false)
+  const [createSceneDialogOpen, setCreateSceneDialogOpen] = useState(false)
+  const [sceneTitle, setSceneTitle] = useState('')
+  const [sceneDescription, setSceneDescription] = useState('')
+
   useEffect(() => {
     if (id) {
       fetchCampaign(id)
       fetchMembers(id)
+      fetchScenes(id)
+      fetchPhaseStatus(id)
       fetchInvites(id).catch(() => {
         // Non-GMs can't fetch invites, that's ok
       })
     }
-  }, [id, fetchCampaign, fetchMembers, fetchInvites])
+  }, [id, fetchCampaign, fetchMembers, fetchScenes, fetchInvites, fetchPhaseStatus])
 
   if (loadingCampaign || !currentCampaign) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto max-w-4xl px-4 py-8">
-          <Skeleton className="mb-4 h-8 w-32" />
-          <Skeleton className="mb-2 h-10 w-3/4" />
-          <Skeleton className="h-6 w-1/2" />
+      <ManagementLayout maxWidth="6xl">
+        <Skeleton className="mb-4 h-8 w-32" />
+        <Skeleton className="mb-2 h-10 w-3/4" />
+        <Skeleton className="mb-4 h-6 w-1/2" />
+        <div className="mt-8 space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-64 w-full" />
         </div>
-      </div>
+      </ManagementLayout>
     )
   }
 
@@ -209,100 +244,210 @@ export default function CampaignDashboard() {
     }
   }
 
+  async function handleCreateScene() {
+    if (!currentCampaign || !sceneTitle.trim()) return
+    try {
+      const data: CreateSceneRequest = {
+        title: sceneTitle.trim(),
+        description: sceneDescription.trim() || undefined,
+      }
+      await createScene(currentCampaign.id, data)
+      toast({ title: 'Scene created' })
+      setCreateSceneDialogOpen(false)
+      setSceneTitle('')
+      setSceneDescription('')
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to create scene',
+        description: (error as Error).message,
+      })
+    }
+  }
+
   const activeInvites = invites.filter((i) => !i.used_at && !i.revoked_at && new Date(i.expires_at) > new Date())
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto max-w-4xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-6">
-          <Link to="/" className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Back to campaigns
-          </Link>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-bold">{currentCampaign.title}</h1>
-                {isGM && (
-                  <Badge variant="default" className="gap-1">
-                    <Crown className="h-3 w-3" />
-                    GM
-                  </Badge>
-                )}
-                {isPaused && (
-                  <Badge variant="secondary">
-                    <Pause className="mr-1 h-3 w-3" />
-                    Paused
-                  </Badge>
-                )}
-              </div>
-              <p className="mt-1 text-muted-foreground">{currentCampaign.description || 'No description'}</p>
-            </div>
-            {isGM && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handlePauseResume}>
-                  {isPaused ? <Play className="mr-2 h-4 w-4" /> : <Pause className="mr-2 h-4 w-4" />}
-                  {isPaused ? 'Resume' : 'Pause'}
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={`/campaigns/${id}/settings`}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </Link>
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+  // Filter scenes for display
+  const visibleScenes = scenes.filter((s) => showArchivedScenes || !s.is_archived)
+  const activeSceneCount = scenes.filter((s) => !s.is_archived).length
 
-        {/* Phase Info */}
-        <Card className="mb-6">
-          <CardContent className="flex items-center justify-between py-4">
+  return (
+    <ManagementLayout maxWidth="6xl">
+      {/* Campaign Header */}
+      <CampaignHeader
+        campaign={currentCampaign}
+        memberCount={members.length}
+        isGM={isGM}
+      />
+
+      {/* GM Actions */}
+      {isGM && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          <Button variant="outline" size="sm" onClick={handlePauseResume}>
+            {isPaused ? <Play className="mr-2 h-4 w-4" /> : <Pause className="mr-2 h-4 w-4" />}
+            {isPaused ? 'Resume' : 'Pause'}
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/campaigns/${id}/settings`}>
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </Link>
+          </Button>
+        </div>
+      )}
+
+      {/* Phase Status */}
+      <Card className="mb-6">
+        <CardContent className="py-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <PhaseIndicator
+                phase={currentCampaign.current_phase}
+                isPaused={isPaused}
+                phaseStatus={phaseStatus}
+                size="md"
+                showDetails={currentCampaign.current_phase === 'pc_phase'}
+              />
+              <TimeGateInfo
+                preset={currentCampaign.settings?.timeGatePreset || null}
+                expiresAt={currentCampaign.current_phase_expires_at}
+              />
+            </div>
             <div className="flex items-center gap-4">
-              <Badge variant={currentCampaign.current_phase === 'gm_phase' ? 'secondary' : 'default'} className="text-sm">
-                {currentCampaign.current_phase === 'gm_phase' ? 'GM Phase' : 'PC Phase'}
-              </Badge>
-              {currentCampaign.current_phase_expires_at && (
-                <span className="flex items-center text-sm text-muted-foreground">
-                  <Clock className="mr-1 h-4 w-4" />
-                  Expires {formatDistanceToNow(new Date(currentCampaign.current_phase_expires_at), { addSuffix: true })}
-                </span>
+              {isGM && phaseStatus && (
+                <PhaseTransitionButton
+                  campaignId={currentCampaign.id}
+                  phaseStatus={phaseStatus}
+                  isGM={isGM}
+                />
               )}
             </div>
-            <div className="text-sm text-muted-foreground">{currentCampaign.scene_count} scenes</div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Tabs */}
-        <Tabs defaultValue="scenes" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="scenes">
-              <BookOpen className="mr-2 h-4 w-4" />
-              Scenes
+      {/* Pass Overview (PC Phase only) */}
+      {currentCampaign.current_phase === 'pc_phase' && (
+        <CampaignPassOverview
+          campaignId={currentCampaign.id}
+          isPCPhase={currentCampaign.current_phase === 'pc_phase'}
+          className="mb-6"
+        />
+      )}
+
+      {/* Storage Indicator (GM only) */}
+      {isGM && <StorageIndicator campaignId={currentCampaign.id} className="mb-6" />}
+
+      {/* Tabs with gold underline */}
+      <Tabs defaultValue="scenes" className="space-y-6">
+        <TabsList variant="underline">
+          <TabsTrigger value="scenes" variant="underline">
+            <BookOpen className="mr-2 h-4 w-4" />
+            Scenes
+          </TabsTrigger>
+          <TabsTrigger value="characters" variant="underline">
+            <User className="mr-2 h-4 w-4" />
+            Characters
+          </TabsTrigger>
+          <TabsTrigger value="members" variant="underline">
+            <Users className="mr-2 h-4 w-4" />
+            Members ({members.length})
+          </TabsTrigger>
+          {isGM && (
+            <TabsTrigger value="invites" variant="underline">
+              <LinkIcon className="mr-2 h-4 w-4" />
+              Invites ({activeInvites.length})
             </TabsTrigger>
-            <TabsTrigger value="characters">
-              <User className="mr-2 h-4 w-4" />
-              Characters
-            </TabsTrigger>
-            <TabsTrigger value="members">
-              <Users className="mr-2 h-4 w-4" />
-              Members ({members.length})
-            </TabsTrigger>
-            {isGM && (
-              <TabsTrigger value="invites">
-                <LinkIcon className="mr-2 h-4 w-4" />
-                Invites ({activeInvites.length})
-              </TabsTrigger>
-            )}
-          </TabsList>
+          )}
+        </TabsList>
 
           <TabsContent value="scenes">
-            <SceneManager
-              campaignId={currentCampaign.id}
-              isGM={isGM}
-              currentPhase={currentCampaign.current_phase}
-            />
+            {/* GM controls header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-4">
+                <p className="text-sm text-muted-foreground">
+                  {activeSceneCount} / 25 active scenes
+                </p>
+                {isGM && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowArchivedScenes(!showArchivedScenes)}
+                    className="text-muted-foreground"
+                  >
+                    {showArchivedScenes ? (
+                      <>
+                        <EyeOff className="mr-2 h-4 w-4" />
+                        Hide archived
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="mr-2 h-4 w-4" />
+                        Show archived
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              {isGM && (
+                <Dialog open={createSceneDialogOpen} onOpenChange={setCreateSceneDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Create Scene
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create Scene</DialogTitle>
+                      <DialogDescription>Add a new scene to the campaign.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="sceneTitle">Title</Label>
+                        <Input
+                          id="sceneTitle"
+                          value={sceneTitle}
+                          onChange={(e) => setSceneTitle(e.target.value)}
+                          placeholder="Scene title"
+                          maxLength={200}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="sceneDescription">Description</Label>
+                        <Textarea
+                          id="sceneDescription"
+                          value={sceneDescription}
+                          onChange={(e) => setSceneDescription(e.target.value)}
+                          placeholder="Scene description (optional)"
+                          maxLength={2000}
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setCreateSceneDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleCreateScene} disabled={!sceneTitle.trim()}>
+                        Create Scene
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+
+            {/* Scene cards grid */}
+            {visibleScenes.length === 0 ? (
+              <EmptyState
+                icon={BookOpen}
+                title="No scenes yet"
+                description={isGM ? "Create your first scene to get started." : "No scenes have been created yet."}
+              />
+            ) : (
+              <SceneCardsGrid scenes={visibleScenes} campaignId={currentCampaign.id} />
+            )}
           </TabsContent>
 
           <TabsContent value="characters">
@@ -383,31 +528,48 @@ export default function CampaignDashboard() {
           )}
         </Tabs>
 
-        {/* Danger Zone */}
-        {isGM && (
-          <Card className="mt-6 border-destructive/50">
-            <CardHeader>
-              <CardTitle className="text-destructive">Danger Zone</CardTitle>
-              <CardDescription>Irreversible actions</CardDescription>
-            </CardHeader>
-            <CardContent className="flex gap-2">
+      {/* Danger Zone */}
+      {isGM && (
+        <Card className="mt-8 border-destructive/50">
+          <CardHeader>
+            <CardTitle className="font-display text-destructive">Danger Zone</CardTitle>
+            <CardDescription>Irreversible actions. Handle with care.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h4 className="font-medium">Transfer GM Role</h4>
+                <p className="text-sm text-muted-foreground">
+                  Transfer ownership to another player.
+                </p>
+              </div>
               <Button
                 variant="outline"
+                className="border-destructive/50 text-destructive hover:bg-destructive hover:text-foreground"
                 onClick={() => {
                   setSelectedMemberForTransfer(null)
                   setTransferDialogOpen(true)
                 }}
               >
-                Transfer GM Role
+                Transfer
               </Button>
+            </div>
+            <Separator />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h4 className="font-medium text-destructive">Delete Campaign</h4>
+                <p className="text-sm text-muted-foreground">
+                  Permanently delete this campaign and all its data.
+                </p>
+              </div>
               <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Campaign
               </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -492,7 +654,7 @@ export default function CampaignDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </ManagementLayout>
   )
 }
 

@@ -148,3 +148,62 @@ RETURNING storage_used_bytes;
 
 -- name: GetCampaignStorage :one
 SELECT storage_used_bytes FROM campaigns WHERE id = $1;
+
+-- ============================================
+-- PHASE MANAGEMENT QUERIES
+-- ============================================
+
+-- name: GetCampaignPhaseStatus :one
+SELECT
+    id,
+    current_phase,
+    current_phase_started_at,
+    current_phase_expires_at,
+    is_paused,
+    settings->>'timeGatePreset' AS time_gate_preset
+FROM campaigns WHERE id = $1;
+
+-- name: TransitionCampaignPhase :one
+UPDATE campaigns
+SET
+    current_phase = $2,
+    current_phase_started_at = NOW(),
+    current_phase_expires_at = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: ClearCampaignTimeGate :exec
+UPDATE campaigns
+SET
+    current_phase_expires_at = NULL,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: GetCampaignsWithActiveTimeGates :many
+SELECT * FROM campaigns
+WHERE current_phase = 'pc_phase'
+  AND current_phase_expires_at IS NOT NULL
+  AND current_phase_expires_at > NOW()
+  AND is_paused = false;
+
+-- name: GetExpiredTimeGateCampaigns :many
+SELECT * FROM campaigns
+WHERE current_phase = 'pc_phase'
+  AND current_phase_expires_at IS NOT NULL
+  AND current_phase_expires_at <= NOW()
+  AND is_paused = false;
+
+-- name: CountActiveLocksInCampaign :one
+SELECT COUNT(*)
+FROM compose_locks cl
+INNER JOIN scenes s ON cl.scene_id = s.id
+WHERE s.campaign_id = $1
+  AND cl.expires_at > NOW();
+
+-- name: CountPendingRollsInCampaign :one
+SELECT COUNT(*)
+FROM rolls r
+INNER JOIN scenes s ON r.scene_id = s.id
+WHERE s.campaign_id = $1
+  AND r.status = 'pending';

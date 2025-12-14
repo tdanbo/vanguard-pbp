@@ -531,3 +531,485 @@ When implementing the notification system:
 - Badge clears when scene marked as read
 - Own posts don't increment badge
 - Hidden posts don't affect non-GM badges
+
+## UI Components
+
+### NotificationCenter Component
+
+Dropdown accessible from header bell icon:
+
+```tsx
+function NotificationCenter() {
+  const { notifications, unreadCount, isLoading } = useNotifications();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-80">
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 border-b">
+          <span className="font-semibold">Notifications</span>
+          <div className="flex items-center gap-1">
+            {unreadCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleMarkAllRead}
+                className="text-xs"
+              >
+                <CheckCheck className="h-3 w-3 mr-1" />
+                Mark all read
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => openSettings()}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Notification List */}
+        <div className="max-h-[400px] overflow-y-auto">
+          {isLoading ? (
+            <div className="p-4 space-y-3">
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No notifications yet</p>
+            </div>
+          ) : (
+            notifications.map(notification => (
+              <NotificationItem
+                key={notification.id}
+                notification={notification}
+                onMarkRead={handleMarkRead}
+                onDelete={handleDelete}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Load More */}
+        {hasMore && (
+          <div className="p-2 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={loadMore}
+            >
+              Load more
+            </Button>
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+```
+
+### NotificationItem Component
+
+Individual notification row:
+
+```tsx
+interface NotificationItemProps {
+  notification: Notification;
+  onMarkRead: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+
+function NotificationItem({ notification, onMarkRead, onDelete }: NotificationItemProps) {
+  const isUnread = !notification.readAt;
+
+  return (
+    <div
+      className={cn(
+        "relative p-3 hover:bg-accent/50 border-b last:border-b-0 group",
+        isUnread && "bg-accent/30"
+      )}
+    >
+      {/* Unread indicator */}
+      {isUnread && (
+        <div className="absolute left-1.5 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-primary" />
+      )}
+
+      <div className="pl-3">
+        {/* Header: Title + Urgent badge */}
+        <div className="flex items-start justify-between gap-2">
+          <p className={cn(
+            "text-sm leading-tight",
+            isUnread && "font-semibold"
+          )}>
+            {notification.title}
+          </p>
+          {notification.isUrgent && (
+            <Badge variant="destructive" className="text-xs shrink-0">
+              Urgent
+            </Badge>
+          )}
+        </div>
+
+        {/* Body - 2 line clamp */}
+        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+          {notification.body}
+        </p>
+
+        {/* Timestamp */}
+        <p className="text-xs text-muted-foreground mt-1">
+          {formatRelativeTime(notification.createdAt)}
+        </p>
+      </div>
+
+      {/* Hover Actions */}
+      <div className="absolute right-2 top-2 hidden group-hover:flex gap-1">
+        {isUnread && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkRead(notification.id);
+            }}
+            title="Mark as read"
+          >
+            <Check className="h-3 w-3" />
+          </Button>
+        )}
+        {notification.link && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            asChild
+          >
+            <a href={notification.link} target="_blank" rel="noopener" title="Open in new tab">
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(notification.id);
+          }}
+          title="Delete"
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+```
+
+### NotificationSettings Dialog
+
+User preferences for notifications:
+
+```tsx
+function NotificationSettings() {
+  const { preferences, updatePreferences, isLoading } = useNotificationPreferences();
+  const form = useForm<NotificationPreferencesForm>({
+    resolver: zodResolver(preferencesSchema),
+    defaultValues: preferences,
+  });
+
+  return (
+    <Dialog>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Notification Settings</DialogTitle>
+          <DialogDescription>
+            Configure how and when you receive notifications.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* In-App Notifications */}
+            <Card className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Bell className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-medium">In-App Notifications</h3>
+              </div>
+              <FormField
+                control={form.control}
+                name="inAppEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between">
+                    <FormLabel className="font-normal">
+                      Enable in-app notifications
+                    </FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </Card>
+
+            {/* Email Notifications */}
+            <Card className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Mail className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-medium">Email Notifications</h3>
+              </div>
+              <FormField
+                control={form.control}
+                name="emailEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between mb-3">
+                    <FormLabel className="font-normal">
+                      Enable email notifications
+                    </FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {form.watch('emailEnabled') && (
+                <FormField
+                  control={form.control}
+                  name="emailFrequency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Delivery frequency</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="realtime">Immediately</SelectItem>
+                          <SelectItem value="digest_daily">Daily digest</SelectItem>
+                          <SelectItem value="digest_weekly">Weekly digest</SelectItem>
+                          <SelectItem value="off">Off</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+              )}
+            </Card>
+
+            {/* Quiet Hours */}
+            <Card className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Moon className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-medium">Quiet Hours</h3>
+              </div>
+              <FormField
+                control={form.control}
+                name="quietHoursEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between mb-3">
+                    <FormLabel className="font-normal">
+                      Enable quiet hours
+                    </FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {form.watch('quietHoursEnabled') && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="quietStart"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Start
+                          </FormLabel>
+                          <FormControl>
+                            <Input type="time" {...field} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="quietEnd"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            End
+                          </FormLabel>
+                          <FormControl>
+                            <Input type="time" {...field} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="timezone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          <Globe className="h-3 w-3" />
+                          Timezone
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+                            <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                            <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                            <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                            <SelectItem value="UTC">UTC</SelectItem>
+                            <SelectItem value="Europe/London">GMT</SelectItem>
+                            <SelectItem value="Europe/Paris">CET</SelectItem>
+                            <SelectItem value="Asia/Tokyo">JST</SelectItem>
+                            <SelectItem value="Australia/Sydney">AEST</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="allowUrgentInQuiet"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between">
+                        <FormLabel className="font-normal text-sm">
+                          Allow urgent notifications during quiet hours
+                        </FormLabel>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </Card>
+
+            <DialogFooter>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Settings
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+### UnreadBadge Component
+
+For navigation elements showing unread count:
+
+```tsx
+function UnreadBadge({ count, max = 99 }: { count: number; max?: number }) {
+  if (count === 0) return null;
+
+  return (
+    <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-medium">
+      {count > max ? `${max}+` : count}
+    </span>
+  );
+}
+
+// Usage in navigation
+<Button variant="ghost" className="relative">
+  <Bell className="h-5 w-5" />
+  <UnreadBadge count={unreadCount} className="absolute -top-1 -right-1" />
+</Button>
+```
+
+### SceneBadge Component
+
+Shows unread post count on scene cards:
+
+```tsx
+function SceneBadge({ sceneId }: { sceneId: string }) {
+  const { badgeCount } = useSceneBadge(sceneId);
+
+  if (badgeCount === 0) return null;
+
+  return (
+    <Badge className="bg-gold-dim text-foreground text-xs">
+      {badgeCount} NEW
+    </Badge>
+  );
+}
+
+// Usage in scene card
+<Card>
+  <CardHeader>
+    <div className="flex items-center justify-between">
+      <CardTitle>{scene.title}</CardTitle>
+      <SceneBadge sceneId={scene.id} />
+    </div>
+  </CardHeader>
+</Card>
+```
+
+### Icons Used
+
+```tsx
+import {
+  Bell,          // Notifications trigger
+  Mail,          // Email settings
+  Moon,          // Quiet hours
+  Clock,         // Time inputs
+  Globe,         // Timezone
+  Check,         // Mark as read
+  CheckCheck,    // Mark all as read
+  Settings,      // Settings button
+  Trash2,        // Delete notification
+  ExternalLink,  // Open in new tab
+  Loader2,       // Loading state
+} from "lucide-react";
+```

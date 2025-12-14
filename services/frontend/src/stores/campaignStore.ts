@@ -14,6 +14,14 @@ import type {
   UpdateSceneRequest,
   CreateSceneResponse,
   ListScenesResponse,
+  Post,
+  CreatePostRequest,
+  UpdatePostRequest,
+  ListPostsResponse,
+  PhaseStatus,
+  CampaignPassSummary,
+  CampaignPhase,
+  PassState,
 } from '@/types'
 
 interface CampaignState {
@@ -24,6 +32,10 @@ interface CampaignState {
   characters: Character[]
   scenes: Scene[]
   sceneWarning: string | null
+  posts: Post[]
+  phaseStatus: PhaseStatus | null
+  passSummary: CampaignPassSummary | null
+  scenePassStates: Record<string, PassState>
 
   // Granular loading states to prevent race conditions
   loadingCampaigns: boolean
@@ -32,6 +44,9 @@ interface CampaignState {
   loadingInvites: boolean
   loadingCharacters: boolean
   loadingScenes: boolean
+  loadingPosts: boolean
+  loadingPhase: boolean
+  loadingPass: boolean
 
   error: string | null
 
@@ -76,6 +91,26 @@ interface CampaignState {
   addCharacterToScene: (campaignId: string, sceneId: string, characterId: string) => Promise<void>
   removeCharacterFromScene: (campaignId: string, sceneId: string, characterId: string) => Promise<void>
 
+  // Posts
+  fetchPosts: (campaignId: string, sceneId: string, characterId?: string) => Promise<void>
+  createPost: (campaignId: string, data: CreatePostRequest, submitImmediately?: boolean) => Promise<Post>
+  updatePost: (postId: string, data: UpdatePostRequest) => Promise<Post>
+  deletePost: (postId: string) => Promise<void>
+  submitPost: (postId: string, isHidden?: boolean) => Promise<Post>
+  unhidePost: (postId: string) => Promise<Post>
+  clearPosts: () => void
+
+  // Phase management
+  fetchPhaseStatus: (campaignId: string) => Promise<void>
+  transitionPhase: (campaignId: string, toPhase: CampaignPhase) => Promise<Campaign>
+  forceTransitionPhase: (campaignId: string, toPhase: CampaignPhase) => Promise<Campaign>
+
+  // Pass management
+  fetchPassSummary: (campaignId: string) => Promise<void>
+  fetchScenePassStates: (campaignId: string, sceneId: string) => Promise<void>
+  setPass: (campaignId: string, sceneId: string, characterId: string, passState: PassState) => Promise<void>
+  clearPass: (campaignId: string, sceneId: string, characterId: string) => Promise<void>
+
   // Utils
   clearError: () => void
   setCurrentCampaign: (campaign: Campaign | null) => void
@@ -89,12 +124,19 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   characters: [],
   scenes: [],
   sceneWarning: null,
+  posts: [],
+  phaseStatus: null,
+  passSummary: null,
+  scenePassStates: {},
   loadingCampaigns: false,
   loadingCampaign: false,
   loadingMembers: false,
   loadingInvites: false,
   loadingCharacters: false,
   loadingScenes: false,
+  loadingPosts: false,
+  loadingPhase: false,
+  loadingPass: false,
   error: null,
 
   fetchCampaigns: async () => {
@@ -586,6 +628,235 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       }))
     } catch (error) {
       set({ error: (error as Error).message, loadingScenes: false })
+      throw error
+    }
+  },
+
+  // Posts
+  fetchPosts: async (campaignId: string, sceneId: string, characterId?: string) => {
+    set({ loadingPosts: true, error: null })
+    try {
+      const queryParam = characterId ? `?characterId=${characterId}` : ''
+      const response = await api<ListPostsResponse>(`/api/v1/campaigns/${campaignId}/scenes/${sceneId}/posts${queryParam}`)
+      set({ posts: response.posts ?? [], loadingPosts: false })
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPosts: false })
+      throw error
+    }
+  },
+
+  createPost: async (campaignId: string, data: CreatePostRequest, submitImmediately = true) => {
+    set({ loadingPosts: true, error: null })
+    try {
+      const queryParam = submitImmediately ? '' : '?submit=false'
+      const post = await api<Post>(`/api/v1/campaigns/${campaignId}/scenes/${data.sceneId}/posts${queryParam}`, {
+        method: 'POST',
+        body: data,
+      })
+      set((state) => ({
+        posts: [...state.posts, post],
+        loadingPosts: false,
+      }))
+      return post
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPosts: false })
+      throw error
+    }
+  },
+
+  updatePost: async (postId: string, data: UpdatePostRequest) => {
+    set({ loadingPosts: true, error: null })
+    try {
+      const post = await api<Post>(`/api/v1/posts/${postId}`, {
+        method: 'PATCH',
+        body: data,
+      })
+      set((state) => ({
+        posts: state.posts.map((p) => (p.id === postId ? post : p)),
+        loadingPosts: false,
+      }))
+      return post
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPosts: false })
+      throw error
+    }
+  },
+
+  deletePost: async (postId: string) => {
+    set({ loadingPosts: true, error: null })
+    try {
+      await api(`/api/v1/posts/${postId}`, { method: 'DELETE' })
+      set((state) => ({
+        posts: state.posts.filter((p) => p.id !== postId),
+        loadingPosts: false,
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPosts: false })
+      throw error
+    }
+  },
+
+  submitPost: async (postId: string, isHidden = false) => {
+    set({ loadingPosts: true, error: null })
+    try {
+      const post = await api<Post>(`/api/v1/posts/${postId}/submit`, {
+        method: 'POST',
+        body: { isHidden },
+      })
+      set((state) => ({
+        posts: state.posts.map((p) => (p.id === postId ? post : p)),
+        loadingPosts: false,
+      }))
+      return post
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPosts: false })
+      throw error
+    }
+  },
+
+  unhidePost: async (postId: string) => {
+    set({ loadingPosts: true, error: null })
+    try {
+      const post = await api<Post>(`/api/v1/posts/${postId}/unhide`, {
+        method: 'POST',
+      })
+      set((state) => ({
+        posts: state.posts.map((p) => (p.id === postId ? post : p)),
+        loadingPosts: false,
+      }))
+      return post
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPosts: false })
+      throw error
+    }
+  },
+
+  clearPosts: () => set({ posts: [] }),
+
+  // Phase management
+  fetchPhaseStatus: async (campaignId: string) => {
+    set({ loadingPhase: true, error: null })
+    try {
+      const phaseStatus = await api<PhaseStatus>(`/api/v1/campaigns/${campaignId}/phase`)
+      set({ phaseStatus, loadingPhase: false })
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPhase: false })
+      throw error
+    }
+  },
+
+  transitionPhase: async (campaignId: string, toPhase: CampaignPhase) => {
+    set({ loadingPhase: true, error: null })
+    try {
+      const campaign = await api<Campaign>(`/api/v1/campaigns/${campaignId}/phase/transition`, {
+        method: 'POST',
+        body: { toPhase },
+      })
+      set((state) => ({
+        campaigns: state.campaigns.map((c) => (c.id === campaignId ? campaign : c)),
+        currentCampaign: state.currentCampaign?.id === campaignId ? campaign : state.currentCampaign,
+        loadingPhase: false,
+      }))
+      // Refresh phase status after transition
+      await get().fetchPhaseStatus(campaignId)
+      return campaign
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPhase: false })
+      throw error
+    }
+  },
+
+  forceTransitionPhase: async (campaignId: string, toPhase: CampaignPhase) => {
+    set({ loadingPhase: true, error: null })
+    try {
+      const campaign = await api<Campaign>(`/api/v1/campaigns/${campaignId}/phase/force-transition`, {
+        method: 'POST',
+        body: { toPhase },
+      })
+      set((state) => ({
+        campaigns: state.campaigns.map((c) => (c.id === campaignId ? campaign : c)),
+        currentCampaign: state.currentCampaign?.id === campaignId ? campaign : state.currentCampaign,
+        loadingPhase: false,
+      }))
+      // Refresh phase status after transition
+      await get().fetchPhaseStatus(campaignId)
+      return campaign
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPhase: false })
+      throw error
+    }
+  },
+
+  // Pass management
+  fetchPassSummary: async (campaignId: string) => {
+    set({ loadingPass: true, error: null })
+    try {
+      const passSummary = await api<CampaignPassSummary>(`/api/v1/campaigns/${campaignId}/pass`)
+      set({ passSummary, loadingPass: false })
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPass: false })
+      throw error
+    }
+  },
+
+  fetchScenePassStates: async (campaignId: string, sceneId: string) => {
+    set({ loadingPass: true, error: null })
+    try {
+      const scenePassStates = await api<Record<string, PassState>>(
+        `/api/v1/campaigns/${campaignId}/scenes/${sceneId}/pass`
+      )
+      set({ scenePassStates, loadingPass: false })
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPass: false })
+      throw error
+    }
+  },
+
+  setPass: async (campaignId: string, sceneId: string, characterId: string, passState: PassState) => {
+    set({ loadingPass: true, error: null })
+    try {
+      await api(`/api/v1/campaigns/${campaignId}/scenes/${sceneId}/characters/${characterId}/pass`, {
+        method: 'POST',
+        body: { passState },
+      })
+      // Update local scene pass states
+      set((state) => ({
+        scenePassStates: { ...state.scenePassStates, [characterId]: passState },
+        scenes: state.scenes.map((s) =>
+          s.id === sceneId ? { ...s, pass_states: { ...s.pass_states, [characterId]: passState } } : s
+        ),
+        loadingPass: false,
+      }))
+      // Refresh pass summary for accurate counts
+      await get().fetchPassSummary(campaignId)
+      // Refresh phase status to update canTransition
+      await get().fetchPhaseStatus(campaignId)
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPass: false })
+      throw error
+    }
+  },
+
+  clearPass: async (campaignId: string, sceneId: string, characterId: string) => {
+    set({ loadingPass: true, error: null })
+    try {
+      await api(`/api/v1/campaigns/${campaignId}/scenes/${sceneId}/characters/${characterId}/pass`, {
+        method: 'DELETE',
+      })
+      // Update local scene pass states
+      set((state) => ({
+        scenePassStates: { ...state.scenePassStates, [characterId]: 'none' },
+        scenes: state.scenes.map((s) =>
+          s.id === sceneId ? { ...s, pass_states: { ...s.pass_states, [characterId]: 'none' } } : s
+        ),
+        loadingPass: false,
+      }))
+      // Refresh pass summary for accurate counts
+      await get().fetchPassSummary(campaignId)
+      // Refresh phase status to update canTransition
+      await get().fetchPhaseStatus(campaignId)
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPass: false })
       throw error
     }
   },

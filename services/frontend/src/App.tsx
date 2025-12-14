@@ -16,6 +16,9 @@ import CampaignDashboard from '@/pages/campaigns/CampaignDashboard'
 import CampaignSettings from '@/pages/campaigns/CampaignSettings'
 import JoinCampaign from '@/pages/campaigns/JoinCampaign'
 
+// Scene pages
+import SceneView from '@/pages/scenes/SceneView'
+
 interface ProtectedRouteProps {
   children: React.ReactNode
 }
@@ -136,6 +139,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <CampaignSettings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/campaigns/:id/scenes/:sceneId"
+          element={
+            <ProtectedRoute>
+              <SceneView />
             </ProtectedRoute>
           }
         />

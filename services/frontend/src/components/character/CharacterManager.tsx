@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { PlusCircle, Archive, ArchiveRestore, User, UserX, Crown, Pencil } from 'lucide-react'
+import { AvatarUploader } from '@/components/image/AvatarUploader'
 import type { Character, CampaignMember, CreateCharacterRequest, CharacterType } from '@/types'
 
 interface CharacterManagerProps {
@@ -303,12 +305,34 @@ export function CharacterManager({ campaignId, isGM, members }: CharacterManager
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Character</DialogTitle>
-            <DialogDescription>Update character details.</DialogDescription>
+            <DialogDescription>Update character details and avatar.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {selectedCharacter && (
+              <>
+                <AvatarUploader
+                  campaignId={campaignId}
+                  characterId={selectedCharacter.id}
+                  currentUrl={selectedCharacter.avatar_url}
+                  displayName={selectedCharacter.display_name}
+                  onUploadComplete={(url) => {
+                    // Update the character in the store with the new avatar URL
+                    const updatedCharacter = { ...selectedCharacter, avatar_url: url }
+                    setSelectedCharacter(updatedCharacter)
+                    fetchCharacters(campaignId)
+                  }}
+                  onDeleteComplete={() => {
+                    const updatedCharacter = { ...selectedCharacter, avatar_url: null }
+                    setSelectedCharacter(updatedCharacter)
+                    fetchCharacters(campaignId)
+                  }}
+                />
+                <Separator />
+              </>
+            )}
             <div className="space-y-2">
               <Label htmlFor="editDisplayName">Name</Label>
               <Input
