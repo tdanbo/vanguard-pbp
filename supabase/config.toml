@@ -1,0 +1,59 @@
+# Supabase Local Development Configuration
+# See: https://supabase.com/docs/guides/cli/config
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://localhost"
+
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+enabled = true
+file_size_limit = "20MB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/auth/callback"]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+[auth.external.google]
+enabled = true
+client_id = "161904305050-5mfoi0uqh6f91l2tknm0i1g4pbcfvld1.apps.googleusercontent.com"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+
+[auth.external.discord]
+enabled = true
+client_id = "1449470941154508880"
+secret = "env(DISCORD_CLIENT_SECRET)"
+
+[analytics]
+enabled = false
+
+[experimental]
+orioledb_version = ""
+s3_host = ""

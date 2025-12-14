@@ -456,6 +456,131 @@ toast({
 })
 ```
 
+## Icons with Lucide React
+
+Lucide React is the default icon library for shadcn/ui. All icons in the project must use Lucide.
+
+### Installation
+
+```bash
+bun add lucide-react
+```
+
+### Basic Usage
+
+```tsx
+import { User, Settings, ChevronRight, AlertCircle, Check, X } from "lucide-react"
+
+export function IconExamples() {
+  return (
+    <div className="flex items-center gap-4">
+      {/* Basic icon */}
+      <User className="h-5 w-5" />
+
+      {/* Colored icon */}
+      <AlertCircle className="h-5 w-5 text-destructive" />
+
+      {/* Icon in button */}
+      <Button variant="outline" size="icon">
+        <Settings className="h-4 w-4" />
+      </Button>
+
+      {/* Icon with text */}
+      <Button>
+        <Check className="mr-2 h-4 w-4" />
+        Confirm
+      </Button>
+    </div>
+  )
+}
+```
+
+### Icon Sizing Convention
+
+Use consistent Tailwind classes for icon sizes:
+- **Small (in buttons, badges)**: `h-3 w-3` or `h-4 w-4`
+- **Medium (standalone)**: `h-5 w-5`
+- **Large (headers, empty states)**: `h-8 w-8` or `h-12 w-12`
+
+### Common Icons for Vanguard PBP
+
+```tsx
+// Navigation & Actions
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  MoreHorizontal,
+  Plus,
+  X,
+  Check,
+  Trash2,
+  Pencil,
+  Copy,
+  ExternalLink,
+} from "lucide-react"
+
+// Status & Feedback
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  Loader2,     // Use with animate-spin for loading
+  Clock,
+} from "lucide-react"
+
+// Game-specific
+import {
+  Users,       // Characters/players
+  Dice1,       // Dice rolling (or Dice5, Dices)
+  Eye,         // Visibility/witness
+  EyeOff,      // Hidden
+  MessageSquare, // Posts/dialogue
+  Swords,      // Actions/combat
+  Crown,       // GM
+  User,        // Player
+  BookOpen,    // Scene/narrative
+  Bookmark,    // Bookmarks
+  Bell,        // Notifications
+  Settings,    // Settings
+  LogOut,      // Logout
+} from "lucide-react"
+```
+
+### Loading Spinner Pattern
+
+```tsx
+import { Loader2 } from "lucide-react"
+
+// In a button
+<Button disabled={isLoading}>
+  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+  {isLoading ? "Saving..." : "Save"}
+</Button>
+
+// Standalone
+<div className="flex items-center justify-center">
+  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+</div>
+```
+
+### Icon Buttons (Accessibility)
+
+Always add `aria-label` for icon-only buttons:
+
+```tsx
+<Button variant="ghost" size="icon" aria-label="Delete post">
+  <Trash2 className="h-4 w-4" />
+</Button>
+
+<Button variant="ghost" size="icon" aria-label="Edit character">
+  <Pencil className="h-4 w-4" />
+</Button>
+```
+
+---
+
 ## Tailwind Styling Conventions
 
 ### Core Principles

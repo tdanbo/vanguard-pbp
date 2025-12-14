@@ -1,0 +1,6 @@
+# Air hot reload artifacts
+tmp/
+build-errors.log
+
+# Build output
+bin/

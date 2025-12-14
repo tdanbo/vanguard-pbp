@@ -401,7 +401,8 @@ See [Phase 1.4: Database Schema](./phase-01-foundation/04-database-schema.md) fo
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         Frontend                             │
-│  React + TypeScript + Tailwind + shadcn/ui + Supabase Client│
+│  React + TypeScript + Tailwind + shadcn/ui + Lucide Icons   │
+│                    + Supabase Client                         │
 └─────────────────────────────────────────────────────────────┘
                               │
                               │ HTTP/REST + WebSocket

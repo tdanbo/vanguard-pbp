@@ -23,6 +23,7 @@ From [technical.md](../../prd/technical.md):
 - React with TypeScript
 - Tailwind CSS utility-first styling
 - shadcn/ui component library
+- Lucide React for icons
 - Bun as package manager
 - Vite for build tooling
 
@@ -112,6 +113,9 @@ bun add @supabase/supabase-js zustand react-router-dom
 
 # Form handling
 bun add react-hook-form @hookform/resolvers zod
+
+# Icons (Lucide - default icon set for shadcn/ui)
+bun add lucide-react
 
 # Development dependencies
 bun add -d @types/node tailwindcss postcss autoprefixer

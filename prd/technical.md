@@ -22,6 +22,10 @@ Utility-first CSS framework. Style components directly in JSX without context-sw
 
 Pre-built, accessible component library built on Radix UI primitives. Copy-paste components that live in your codebase (not a dependency). Fully customizable with Tailwind. Handles accessibility, keyboard navigation, and focus management correctly out of the box. Includes dialogs, dropdowns, forms, toasts, and other complex UI patterns.
 
+### Lucide React
+
+Icon library for the frontend. Lucide is the default icon set used by shadcn/ui components. Provides consistent, customizable SVG icons that integrate seamlessly with Tailwind CSS. Icons are tree-shakeable—only imported icons are bundled.
+
 ### Bun
 
 JavaScript runtime and package manager. Significantly faster than Node.js for development tasks—installs dependencies in seconds, runs scripts instantly. Native TypeScript support without compilation step. Used for package management and running scripts.
