@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { apiUpload, apiDelete, APIError } from '@/lib/api'
 import { Loader2, Upload, Trash2, ImageIcon } from 'lucide-react'
@@ -132,15 +131,16 @@ export function SceneHeaderUploader({
         </div>
       )}
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        onChange={handleFileSelect}
+        disabled={uploading || deleting}
+        className="sr-only"
+      />
+
       <div className="flex gap-2">
-        <Input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          onChange={handleFileSelect}
-          disabled={uploading || deleting}
-          className="hidden"
-        />
         <Button
           variant="outline"
           size="sm"

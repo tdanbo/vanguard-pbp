@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useToast } from '@/hooks/use-toast'
 import { apiUpload, apiDelete, APIError } from '@/lib/api'
@@ -126,15 +125,16 @@ export function AvatarUploader({
           </AvatarFallback>
         </Avatar>
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={handleFileSelect}
+          disabled={uploading || deleting}
+          className="sr-only"
+        />
+
         <div className="flex flex-col gap-2">
-          <Input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={handleFileSelect}
-            disabled={uploading || deleting}
-            className="hidden"
-          />
           <Button
             variant="outline"
             size="sm"
