@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils"
 
 interface CharacterPortraitProps {
   src?: string | null
-  name: string
+  name?: string | null
   size?: "sm" | "md" | "lg"
   className?: string
 }
@@ -13,7 +13,8 @@ const sizeClasses = {
   lg: "w-30 h-[150px] text-2xl", // 120×150
 }
 
-function getInitials(name: string): string {
+function getInitials(name: string | null | undefined): string {
+  if (!name) return "N" // Default for Narrator
   const words = name.trim().split(/\s+/)
   if (words.length === 0 || words[0].length === 0) {
     return "?"
@@ -24,7 +25,7 @@ function getInitials(name: string): string {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase()
 }
 
-function getGradient(name: string): string {
+function getGradient(name: string | null | undefined): string {
   // Generate consistent gradient based on name
   const gradients = [
     "from-amber-900 to-amber-700",
@@ -36,7 +37,8 @@ function getGradient(name: string): string {
     "from-orange-900 to-orange-700",
     "from-indigo-900 to-indigo-700",
   ]
-  const hash = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  const effectiveName = name || "Narrator"
+  const hash = effectiveName.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
   return gradients[hash % gradients.length]
 }
 
@@ -46,6 +48,7 @@ export function CharacterPortrait({
   size = "md",
   className,
 }: CharacterPortraitProps) {
+  const displayName = name || "Narrator"
   const initials = getInitials(name)
   const gradient = getGradient(name)
 
@@ -60,7 +63,7 @@ export function CharacterPortrait({
       {src ? (
         <img
           src={src}
-          alt={name}
+          alt={displayName}
           className="w-full h-full object-cover"
         />
       ) : (

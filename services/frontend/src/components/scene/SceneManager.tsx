@@ -117,7 +117,7 @@ export function SceneManager({ campaignId, isGM, currentPhase, settings }: Scene
           description: response.warning,
         })
       } else {
-        toast({ title: 'Scene created' })
+        toast({ title: 'Scene created - you can now add a header image' })
       }
 
       if (response.deletedSceneId) {
@@ -130,6 +130,12 @@ export function SceneManager({ campaignId, isGM, currentPhase, settings }: Scene
 
       setCreateDialogOpen(false)
       resetForm()
+
+      // Open edit dialog to allow adding header image
+      setSelectedScene(response.scene)
+      setTitle(response.scene.title)
+      setDescription(response.scene.description || '')
+      setEditDialogOpen(true)
     } catch (error) {
       toast({
         variant: 'destructive',

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -43,8 +44,11 @@ func CreatePost(db *database.DB) gin.HandlerFunc {
 		}
 
 		userID := parseUUID(userIDStr)
+		log.Printf("[DEBUG] CreatePost request: sceneId=%s, characterId=%v, blocks=%d, isHidden=%v",
+			req.SceneID, req.CharacterID, len(req.Blocks), req.IsHidden)
 		resp, err := svc.CreatePost(c.Request.Context(), userID, req, submitImmediately)
 		if err != nil {
+			log.Printf("[ERROR] CreatePost failed: %v", err)
 			handlePostError(c, err)
 			return
 		}
@@ -384,6 +388,9 @@ func handlePostError(c *gin.Context, err error) {
 			models.NewAPIError("NOT_MEMBER", "You are not a member of this campaign"),
 		)
 	default:
+		// Log the actual error for debugging
+		log.Printf("[ERROR] CreatePost unhandled error: %v", err)
+		c.Error(err)
 		models.InternalError(c)
 	}
 }

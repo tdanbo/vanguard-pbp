@@ -54,7 +54,7 @@ interface SceneHeaderCompactProps {
 
 export function SceneHeaderCompact({ scene }: SceneHeaderCompactProps) {
   return (
-    <div className="bg-panel backdrop-blur-md border-b border-border/50 py-3 px-4">
+    <div className="bg-panel backdrop-blur-md border-b border-border/50 py-3 px-4 lg:pr-72">
       <div className="max-w-4xl mx-auto">
         <h1 className="font-display text-xl font-semibold">{scene.title}</h1>
       </div>

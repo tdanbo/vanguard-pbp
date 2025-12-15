@@ -169,7 +169,7 @@ export interface Post {
 
 export interface CreatePostRequest {
   sceneId: string
-  characterId: string
+  characterId: string | null  // null for Narrator posts (GM only)
   blocks: PostBlock[]
   oocText?: string
   intention?: string

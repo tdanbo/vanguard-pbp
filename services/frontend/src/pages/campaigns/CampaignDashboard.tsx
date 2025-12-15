@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Separator } from '@/components/ui/separator'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,8 +22,6 @@ import {
   Crown,
   Users,
   Settings,
-  Pause,
-  Play,
   Trash2,
   Copy,
   LinkIcon,
@@ -50,7 +47,6 @@ import { PlusCircle, Eye, EyeOff } from 'lucide-react'
 import { ManagementLayout } from '@/components/layout'
 import { CampaignHeader, SceneCardsGrid } from '@/components/campaign'
 import { CharacterManager } from '@/components/character/CharacterManager'
-import { StorageIndicator } from '@/components/image/StorageIndicator'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   PhaseIndicator,
@@ -75,22 +71,14 @@ export default function CampaignDashboard() {
     fetchInvites,
     fetchScenes,
     fetchPhaseStatus,
-    pauseCampaign,
-    resumeCampaign,
-    deleteCampaign,
     createInvite,
     revokeInvite,
     removeMember,
     leaveCampaign,
-    transferGm,
     createScene,
   } = useCampaignStore()
 
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteConfirmTitle, setDeleteConfirmTitle] = useState('')
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
-  const [transferDialogOpen, setTransferDialogOpen] = useState(false)
-  const [selectedMemberForTransfer, setSelectedMemberForTransfer] = useState<string | null>(null)
 
   // Scene state
   const [showArchivedScenes, setShowArchivedScenes] = useState(false)
@@ -126,40 +114,6 @@ export default function CampaignDashboard() {
 
   const isGM = currentCampaign.user_role === 'gm'
   const isPaused = currentCampaign.is_paused
-
-  async function handlePauseResume() {
-    if (!currentCampaign) return
-    try {
-      if (isPaused) {
-        await resumeCampaign(currentCampaign.id)
-        toast({ title: 'Campaign resumed', description: 'The campaign is now active again.' })
-      } else {
-        await pauseCampaign(currentCampaign.id)
-        toast({ title: 'Campaign paused', description: 'Time gates are now frozen.' })
-      }
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to update campaign',
-        description: (error as Error).message,
-      })
-    }
-  }
-
-  async function handleDelete() {
-    if (!currentCampaign) return
-    try {
-      await deleteCampaign(currentCampaign.id, deleteConfirmTitle)
-      toast({ title: 'Campaign deleted', description: 'The campaign has been permanently deleted.' })
-      navigate('/')
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to delete campaign',
-        description: (error as Error).message,
-      })
-    }
-  }
 
   async function handleCreateInvite() {
     if (!currentCampaign) return
@@ -229,21 +183,6 @@ export default function CampaignDashboard() {
     }
   }
 
-  async function handleTransferGm() {
-    if (!selectedMemberForTransfer || !currentCampaign) return
-    try {
-      await transferGm(currentCampaign.id, selectedMemberForTransfer)
-      toast({ title: 'GM role transferred' })
-      setTransferDialogOpen(false)
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to transfer GM role',
-        description: (error as Error).message,
-      })
-    }
-  }
-
   async function handleCreateScene() {
     if (!currentCampaign || !sceneTitle.trim()) return
     try {
@@ -283,10 +222,6 @@ export default function CampaignDashboard() {
       {/* GM Actions */}
       {isGM && (
         <div className="flex flex-wrap gap-2 mb-6">
-          <Button variant="outline" size="sm" onClick={handlePauseResume}>
-            {isPaused ? <Play className="mr-2 h-4 w-4" /> : <Pause className="mr-2 h-4 w-4" />}
-            {isPaused ? 'Resume' : 'Pause'}
-          </Button>
           <Button variant="outline" size="sm" asChild>
             <Link to={`/campaigns/${id}/settings`}>
               <Settings className="mr-2 h-4 w-4" />
@@ -335,9 +270,6 @@ export default function CampaignDashboard() {
         />
       )}
 
-      {/* Storage Indicator (GM only) */}
-      {isGM && <StorageIndicator campaignId={currentCampaign.id} className="mb-6" />}
-
       {/* Tabs with gold underline */}
       <Tabs defaultValue="scenes" className="space-y-6">
         <TabsList variant="underline">
@@ -345,9 +277,13 @@ export default function CampaignDashboard() {
             <BookOpen className="mr-2 h-4 w-4" />
             Scenes
           </TabsTrigger>
-          <TabsTrigger value="characters" variant="underline">
+          <TabsTrigger value="pcs" variant="underline">
             <User className="mr-2 h-4 w-4" />
-            Characters
+            PCs
+          </TabsTrigger>
+          <TabsTrigger value="npcs" variant="underline">
+            <Users className="mr-2 h-4 w-4" />
+            NPCs
           </TabsTrigger>
           <TabsTrigger value="members" variant="underline">
             <Users className="mr-2 h-4 w-4" />
@@ -450,11 +386,21 @@ export default function CampaignDashboard() {
             )}
           </TabsContent>
 
-          <TabsContent value="characters">
+          <TabsContent value="pcs">
             <CharacterManager
               campaignId={currentCampaign.id}
               isGM={isGM}
               members={members}
+              characterTypeFilter="pc"
+            />
+          </TabsContent>
+
+          <TabsContent value="npcs">
+            <CharacterManager
+              campaignId={currentCampaign.id}
+              isGM={isGM}
+              members={members}
+              characterTypeFilter="npc"
             />
           </TabsContent>
 
@@ -473,10 +419,6 @@ export default function CampaignDashboard() {
                       isCurrentUserGM={isGM}
                       currentCampaign={currentCampaign}
                       onRemove={() => handleRemoveMember(member.user_id)}
-                      onTransfer={() => {
-                        setSelectedMemberForTransfer(member.user_id)
-                        setTransferDialogOpen(true)
-                      }}
                     />
                   ))}
                 </div>
@@ -528,82 +470,6 @@ export default function CampaignDashboard() {
           )}
         </Tabs>
 
-      {/* Danger Zone */}
-      {isGM && (
-        <Card className="mt-8 border-destructive/50">
-          <CardHeader>
-            <CardTitle className="font-display text-destructive">Danger Zone</CardTitle>
-            <CardDescription>Irreversible actions. Handle with care.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h4 className="font-medium">Transfer GM Role</h4>
-                <p className="text-sm text-muted-foreground">
-                  Transfer ownership to another player.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                className="border-destructive/50 text-destructive hover:bg-destructive hover:text-foreground"
-                onClick={() => {
-                  setSelectedMemberForTransfer(null)
-                  setTransferDialogOpen(true)
-                }}
-              >
-                Transfer
-              </Button>
-            </div>
-            <Separator />
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h4 className="font-medium text-destructive">Delete Campaign</h4>
-                <p className="text-sm text-muted-foreground">
-                  Permanently delete this campaign and all its data.
-                </p>
-              </div>
-              <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Campaign
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Delete Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Campaign?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. All scenes, posts, and data will be permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4">
-            <label className="text-sm font-medium">
-              Type &quot;{currentCampaign.title}&quot; to confirm:
-            </label>
-            <Input
-              className="mt-2"
-              value={deleteConfirmTitle}
-              onChange={(e) => setDeleteConfirmTitle(e.target.value)}
-              placeholder="Campaign title"
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDelete}
-              disabled={deleteConfirmTitle !== currentCampaign.title}
-            >
-              Delete Campaign
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Leave Dialog */}
       <AlertDialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
         <AlertDialogContent>
@@ -619,41 +485,6 @@ export default function CampaignDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Transfer GM Dialog */}
-      <AlertDialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Transfer GM Role?</AlertDialogTitle>
-            <AlertDialogDescription>
-              You will become a player and lose GM permissions.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4">
-            <label className="mb-2 block text-sm font-medium">Select new GM:</label>
-            <div className="space-y-2">
-              {members
-                .filter((m) => m.role === 'player')
-                .map((member) => (
-                  <Button
-                    key={member.id}
-                    variant={selectedMemberForTransfer === member.user_id ? 'default' : 'outline'}
-                    className="w-full justify-start"
-                    onClick={() => setSelectedMemberForTransfer(member.user_id)}
-                  >
-                    Player {member.user_id.slice(0, 8)}...
-                  </Button>
-                ))}
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleTransferGm} disabled={!selectedMemberForTransfer}>
-              Transfer Role
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </ManagementLayout>
   )
 }
@@ -663,13 +494,11 @@ function MemberRow({
   isCurrentUserGM,
   currentCampaign,
   onRemove,
-  onTransfer,
 }: {
   member: CampaignMember
   isCurrentUserGM: boolean
   currentCampaign: { owner_id: string | null }
   onRemove: () => void
-  onTransfer: () => void
 }) {
   const isGM = member.role === 'gm'
   const isOwner = currentCampaign.owner_id === member.user_id
@@ -696,11 +525,6 @@ function MemberRow({
       </div>
       {isCurrentUserGM && !isOwner && (
         <div className="flex gap-1">
-          {member.role === 'player' && (
-            <Button variant="ghost" size="sm" onClick={onTransfer}>
-              <Crown className="h-4 w-4" />
-            </Button>
-          )}
           <Button variant="ghost" size="sm" onClick={onRemove}>
             <UserMinus className="h-4 w-4" />
           </Button>

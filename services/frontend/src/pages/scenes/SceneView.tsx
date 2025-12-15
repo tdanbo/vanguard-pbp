@@ -7,6 +7,14 @@ import { SceneRoster, type SceneRosterCharacter } from '@/components/scene/Scene
 import { PostStream } from '@/components/posts/PostStream'
 import { ImmersiveComposer } from '@/components/posts/ImmersiveComposer'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -47,6 +55,7 @@ export default function SceneView() {
     setPass,
     clearPass,
     archiveScene,
+    addCharacterToScene,
   } = useCampaignStore()
 
   const [isScrolled, setIsScrolled] = useState(false)
@@ -54,6 +63,8 @@ export default function SceneView() {
     null
   )
   const [showRosterSheet, setShowRosterSheet] = useState(false)
+  const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
+  const [addCharacterSelectedId, setAddCharacterSelectedId] = useState('')
 
   // Current scene
   const scene = useMemo(
@@ -86,12 +97,25 @@ export default function SceneView() {
     return sceneCharacters.filter((c) => c.assigned_user_id === user.id)
   }, [sceneCharacters, user])
 
+  // Characters available to add (not archived, not already in this scene)
+  const availableCharacters = useMemo(() => {
+    if (!scene) return []
+    return characters.filter(
+      (c) => !c.is_archived && !scene.character_ids.includes(c.id)
+    )
+  }, [characters, scene])
+
   // Compute effective selected character ID (handles initial selection)
+  // GMs default to 'narrator' when they have no assigned characters
   const effectiveSelectedCharacterId = useMemo(() => {
     if (selectedCharacterId) return selectedCharacterId
     if (userCharacters.length > 0) return userCharacters[0].id
+    if (isGM) return 'narrator'
     return null
-  }, [userCharacters, selectedCharacterId])
+  }, [userCharacters, selectedCharacterId, isGM])
+
+  // Is Narrator mode active?
+  const isNarrator = effectiveSelectedCharacterId === 'narrator'
 
   // Selected character for posting
   const selectedCharacter = useMemo(
@@ -202,6 +226,22 @@ export default function SceneView() {
     }
   }
 
+  const handleAddCharacter = async () => {
+    if (!campaignId || !sceneId || !addCharacterSelectedId) return
+    try {
+      await addCharacterToScene(campaignId, sceneId, addCharacterSelectedId)
+      toast({ title: 'Character added to scene' })
+      setAddCharacterDialogOpen(false)
+      setAddCharacterSelectedId('')
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to add character',
+        description: (error as Error).message,
+      })
+    }
+  }
+
   const handlePostCreated = () => {
     if (campaignId && sceneId) {
       fetchPosts(campaignId, sceneId)
@@ -222,27 +262,30 @@ export default function SceneView() {
     ? 'paused'
     : currentCampaign?.current_phase || 'gm_phase'
 
-  // Character selector for multi-character users
-  const CharacterSelector =
-    userCharacters.length > 1 ? (
-      <div className="fixed bottom-24 right-4 z-40 md:hidden">
-        <Select
-          value={effectiveSelectedCharacterId || ''}
-          onValueChange={setSelectedCharacterId}
-        >
-          <SelectTrigger className="w-[160px] bg-panel backdrop-blur-md border-border/50">
-            <SelectValue placeholder="Select character" />
-          </SelectTrigger>
-          <SelectContent>
-            {userCharacters.map((char) => (
-              <SelectItem key={char.id} value={char.id}>
-                {char.display_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    ) : null
+  // Character selector for multi-character users or GMs with Narrator option
+  const showCharacterSelector = isGM || userCharacters.length > 1
+  const CharacterSelector = showCharacterSelector ? (
+    <div className="fixed bottom-24 left-4 z-40 lg:hidden">
+      <Select
+        value={effectiveSelectedCharacterId || ''}
+        onValueChange={setSelectedCharacterId}
+      >
+        <SelectTrigger className="w-[160px] bg-panel backdrop-blur-md border-border/50">
+          <SelectValue placeholder="Select character" />
+        </SelectTrigger>
+        <SelectContent>
+          {isGM && (
+            <SelectItem value="narrator">Narrator</SelectItem>
+          )}
+          {userCharacters.map((char) => (
+            <SelectItem key={char.id} value={char.id}>
+              {char.display_name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  ) : null
 
   return (
     <ImmersiveLayout
@@ -268,9 +311,9 @@ export default function SceneView() {
       )}
 
       {/* Main content with sidebar on desktop */}
-      <div className="flex">
-        {/* Main column */}
-        <div className="flex-1">
+      <div className="lg:pr-72">
+        {/* Main column - centered with sidebar offset on desktop */}
+        <div>
           <SceneHeader scene={scene} />
 
           <PostStream
@@ -284,40 +327,42 @@ export default function SceneView() {
           {/* Spacer for fixed composer */}
           <div className="h-32" />
         </div>
+      </div>
 
-        {/* Desktop sidebar */}
-        <div className="hidden lg:block w-64 shrink-0 p-4">
-          <div className="sticky top-20">
-            <SceneRoster
-              phase={phase}
-              characters={rosterCharacters}
-              isGM={isGM}
-              onPass={handlePass}
-              onClearPass={handleClearPass}
-            />
+      {/* Desktop sidebar - fixed on right */}
+      <div className="hidden lg:block fixed top-20 right-4 w-64 z-30">
+        <SceneRoster
+          phase={phase}
+          characters={rosterCharacters}
+          isGM={isGM}
+          onPass={handlePass}
+          onClearPass={handleClearPass}
+          onAddCharacter={() => setAddCharacterDialogOpen(true)}
+        />
 
-            {/* Desktop character selector */}
-            {userCharacters.length > 1 && (
-              <div className="mt-4">
-                <Select
-                  value={effectiveSelectedCharacterId || ''}
-                  onValueChange={setSelectedCharacterId}
-                >
-                  <SelectTrigger className="bg-panel backdrop-blur-md border-border/50">
-                    <SelectValue placeholder="Select character" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {userCharacters.map((char) => (
-                      <SelectItem key={char.id} value={char.id}>
-                        {char.display_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+        {/* Desktop character selector */}
+        {showCharacterSelector && (
+          <div className="mt-4">
+            <Select
+              value={effectiveSelectedCharacterId || ''}
+              onValueChange={setSelectedCharacterId}
+            >
+              <SelectTrigger className="bg-panel backdrop-blur-md border-border/50">
+                <SelectValue placeholder="Select character" />
+              </SelectTrigger>
+              <SelectContent>
+                {isGM && (
+                  <SelectItem value="narrator">Narrator</SelectItem>
+                )}
+                {userCharacters.map((char) => (
+                  <SelectItem key={char.id} value={char.id}>
+                    {char.display_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Mobile roster button and sheet */}
@@ -338,6 +383,7 @@ export default function SceneView() {
               isGM={isGM}
               onPass={handlePass}
               onClearPass={handleClearPass}
+              onAddCharacter={() => setAddCharacterDialogOpen(true)}
             />
           </SheetContent>
         </Sheet>
@@ -351,9 +397,50 @@ export default function SceneView() {
         campaignId={campaignId!}
         sceneId={sceneId!}
         character={selectedCharacter}
+        isNarrator={isNarrator}
         settings={settings}
         onPostCreated={handlePostCreated}
       />
+
+      {/* Add Character Dialog */}
+      <Dialog open={addCharacterDialogOpen} onOpenChange={setAddCharacterDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Character to Scene</DialogTitle>
+            <DialogDescription>
+              Select a character to add. Characters can only be in one scene at a time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {availableCharacters.length === 0 ? (
+              <p className="text-center text-muted-foreground">
+                All characters are already assigned to scenes.
+              </p>
+            ) : (
+              <Select value={addCharacterSelectedId} onValueChange={setAddCharacterSelectedId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a character" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCharacters.map((character) => (
+                    <SelectItem key={character.id} value={character.id}>
+                      {character.display_name} ({character.character_type.toUpperCase()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddCharacterDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddCharacter} disabled={!addCharacterSelectedId}>
+              Add Character
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ImmersiveLayout>
   )
 }

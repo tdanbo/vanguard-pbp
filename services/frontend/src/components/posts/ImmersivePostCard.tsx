@@ -77,7 +77,7 @@ export function ImmersivePostCard({
           )}
 
           {/* Character name */}
-          <h3 className="character-name mb-2">{post.characterName}</h3>
+          <h3 className="character-name mb-2">{post.characterName || 'Narrator'}</h3>
 
           {/* Post content */}
           <div className="prose prose-invert prose-sm max-w-none">

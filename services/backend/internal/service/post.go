@@ -167,14 +167,18 @@ func (s *PostService) CreatePost(
 		return nil, ErrNotGM
 	}
 
-	// Marshal blocks to JSON
-	blocksJSON, err := json.Marshal(req.Blocks)
+	// Marshal blocks to JSON (ensure empty array if nil)
+	blocks := req.Blocks
+	if blocks == nil {
+		blocks = []PostBlock{}
+	}
+	blocksJSON, err := json.Marshal(blocks)
 	if err != nil {
 		return nil, err
 	}
 
-	// Prepare witnesses
-	var witnesses []pgtype.UUID
+	// Prepare witnesses (ensure empty slice, not nil)
+	witnesses := make([]pgtype.UUID, 0)
 	if submitImmediately && !req.IsHidden {
 		// Get all characters in scene as witnesses
 		witnesses = append(witnesses, sceneWithCampaign.CharacterIds...)

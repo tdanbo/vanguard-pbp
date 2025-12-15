@@ -4,6 +4,14 @@ import type { Draft, SaveDraftRequest, PostBlock } from '@/types'
 
 const AUTOSAVE_DELAY = 2000 // 2 seconds debounce
 
+// Check if characterId is a valid UUID (not 'narrator' or empty)
+function isValidCharacterId(id: string): boolean {
+  if (!id || id === 'narrator') return false
+  // Basic UUID format check
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return uuidRegex.test(id)
+}
+
 interface UseDraftOptions {
   sceneId: string
   characterId: string
@@ -50,8 +58,13 @@ export function useDraft({
 
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Schedule autosave
+  // Schedule autosave (skip for narrator mode)
   const scheduleAutosave = useCallback(() => {
+    // Skip drafts for narrator mode or invalid characterId
+    if (!isValidCharacterId(characterId)) {
+      return
+    }
+
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current)
     }
@@ -114,8 +127,13 @@ export function useDraft({
     scheduleAutosave()
   }, [scheduleAutosave])
 
-  // Load draft
+  // Load draft (skip for narrator mode)
   const loadDraft = useCallback(async () => {
+    // Skip drafts for narrator mode or invalid characterId
+    if (!isValidCharacterId(characterId)) {
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
@@ -136,8 +154,13 @@ export function useDraft({
     }
   }, [sceneId, characterId])
 
-  // Manual save
+  // Manual save (skip for narrator mode)
   const saveDraft = useCallback(async () => {
+    // Skip drafts for narrator mode or invalid characterId
+    if (!isValidCharacterId(characterId)) {
+      return
+    }
+
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current)
     }
@@ -169,10 +192,23 @@ export function useDraft({
     }
   }, [sceneId, characterId, blocks, oocText, intention, modifier, isHidden])
 
-  // Delete draft
+  // Delete draft (skip for narrator mode)
   const deleteDraft = useCallback(async () => {
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current)
+    }
+
+    // Skip drafts for narrator mode or invalid characterId
+    if (!isValidCharacterId(characterId)) {
+      // Just clear local state
+      setDraft(null)
+      setBlocksState([])
+      setOocTextState('')
+      setIntentionState(null)
+      setModifierState(null)
+      setIsHiddenState(false)
+      setIsDirty(false)
+      return
     }
 
     try {

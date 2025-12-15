@@ -68,8 +68,8 @@
     --accent: 43 50% 57%;
     --accent-foreground: 240 6% 7%;
 
-    /* Destructive - Muted red */
-    --destructive: 0 50% 35%;
+    /* Destructive - Accessible red (WCAG AA compliant) */
+    --destructive: 0 65% 50%;
     --destructive-foreground: 40 10% 96%;
 
     /* Borders - subtle warm */
@@ -101,8 +101,8 @@
     --text-secondary: 40 5% 65%;
     --text-muted: 40 3% 42%;
 
-    /* Semantic colors */
-    --success: 140 30% 35%;
+    /* Semantic colors - WCAG AA compliant */
+    --success: 140 40% 45%;
     --warning: 43 70% 45%;
     --info: 210 25% 45%;
   }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -17,6 +17,8 @@ import {
   Quote,
   Swords,
   EyeOff,
+  X,
+  Plus,
 } from 'lucide-react'
 import { useComposeLock } from '@/hooks/useComposeLock'
 import { useDraft } from '@/hooks/useDraft'
@@ -29,6 +31,7 @@ interface ImmersiveComposerProps {
   campaignId: string
   sceneId: string
   character: Character | null
+  isNarrator?: boolean
   settings: CampaignSettings
   onPostCreated?: () => void
   isLocked?: boolean
@@ -39,6 +42,7 @@ export function ImmersiveComposer({
   campaignId,
   sceneId,
   character,
+  isNarrator = false,
   settings,
   onPostCreated,
   isLocked: externalLocked = false,
@@ -49,11 +53,17 @@ export function ImmersiveComposer({
 
   const [mode, setMode] = useState<'narrative' | 'ooc'>('narrative')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [narratorComposing, setNarratorComposing] = useState(false)
+  const textareaRefs = useRef<Map<number, HTMLTextAreaElement>>(new Map())
 
-  // Compose lock hook (only if character selected)
+  // Derive the effective character ID for hooks (narrator uses 'narrator' as ID)
+  const effectiveCharacterId = isNarrator ? 'narrator' : (character?.id || '')
+  const displayName = isNarrator ? 'Narrator' : character?.display_name
+
+  // Compose lock hook (only used for character posts, not narrator)
   const {
     lockId,
-    isLocked: hasLock,
+    isLocked: hasCharacterLock,
     remainingSeconds,
     acquireLock,
     releaseLock,
@@ -61,7 +71,7 @@ export function ImmersiveComposer({
     isLoading: lockLoading,
   } = useComposeLock({
     sceneId,
-    characterId: character?.id || '',
+    characterId: isNarrator ? '' : effectiveCharacterId,
     onLockLost: () => {
       toast({
         variant: 'destructive',
@@ -80,6 +90,8 @@ export function ImmersiveComposer({
     },
   })
 
+  const hasLock = isNarrator ? narratorComposing : hasCharacterLock
+
   // Draft hook
   const {
     blocks,
@@ -93,12 +105,12 @@ export function ImmersiveComposer({
     deleteDraft,
   } = useDraft({
     sceneId,
-    characterId: character?.id || '',
+    characterId: effectiveCharacterId,
     autoLoad: true,
   })
 
-  // Content derived from mode
-  const content = mode === 'narrative' ? blocks[0]?.content || '' : oocText
+  // Check if there's any content in blocks
+  const hasBlockContent = blocks.some((b) => b.content.trim())
 
   // Update hidden status when toggle changes
   useEffect(() => {
@@ -107,29 +119,67 @@ export function ImmersiveComposer({
     }
   }, [isHidden, lockId, updateHiddenStatus])
 
-  const handleContentChange = useCallback(
-    (value: string) => {
-      if (mode === 'narrative') {
-        const newBlock: PostBlock = {
-          type: 'action',
-          content: value,
-          order: 0,
-        }
-        setBlocks([newBlock])
-      } else {
-        setOocText(value)
+  // Add a new block
+  const addBlock = useCallback(
+    (type: 'action' | 'dialog') => {
+      const newBlock: PostBlock = {
+        type,
+        content: '',
+        order: blocks.length,
       }
+      const newBlocks = [...blocks, newBlock]
+      setBlocks(newBlocks)
+      // Focus the new block after render
+      setTimeout(() => {
+        const textarea = textareaRefs.current.get(blocks.length)
+        textarea?.focus()
+      }, 0)
     },
-    [mode, setBlocks, setOocText]
+    [blocks, setBlocks]
+  )
+
+  // Update a specific block's content
+  const updateBlock = useCallback(
+    (index: number, content: string) => {
+      const newBlocks = blocks.map((block, i) =>
+        i === index ? { ...block, content } : block
+      )
+      setBlocks(newBlocks)
+    },
+    [blocks, setBlocks]
+  )
+
+  // Delete a block
+  const deleteBlock = useCallback(
+    (index: number) => {
+      const newBlocks = blocks
+        .filter((_, i) => i !== index)
+        .map((block, i) => ({ ...block, order: i }))
+      setBlocks(newBlocks)
+    },
+    [blocks, setBlocks]
   )
 
   const handleAcquireLock = async () => {
-    if (!character) return
-    await acquireLock(isHidden)
+    if (!character && !isNarrator) return
+
+    if (isNarrator) {
+      setNarratorComposing(true)
+    } else {
+      await acquireLock(isHidden)
+    }
+  }
+
+  const handleReleaseLock = async () => {
+    if (isNarrator) {
+      setNarratorComposing(false)
+    } else {
+      await releaseLock()
+    }
   }
 
   const handleSubmit = async () => {
-    if (!lockId || !character) {
+    if (!isNarrator && !lockId) {
       toast({
         variant: 'destructive',
         title: 'No lock',
@@ -137,14 +187,17 @@ export function ImmersiveComposer({
       })
       return
     }
+    if (!character && !isNarrator) {
+      return
+    }
 
-    // Validate content
-    const hasContent = blocks.some((b) => b.content.trim())
-    if (!hasContent && !oocText.trim()) {
+    // Validate content - need at least one block with content
+    const filledBlocks = blocks.filter((b) => b.content.trim())
+    if (filledBlocks.length === 0 && !oocText.trim()) {
       toast({
         variant: 'destructive',
         title: 'Empty post',
-        description: 'Please add some content before posting.',
+        description: 'Please add at least one action or dialog block.',
       })
       return
     }
@@ -154,22 +207,21 @@ export function ImmersiveComposer({
     try {
       await createPost(campaignId, {
         sceneId,
-        characterId: character.id,
-        blocks: blocks.filter((b) => b.content.trim()),
+        characterId: isNarrator ? null : character!.id,
+        blocks: filledBlocks,
         oocText: oocText || undefined,
         intention: intention || undefined,
         isHidden,
       })
 
-      // Delete the draft and release the lock
       await deleteDraft()
-      await releaseLock()
+      await handleReleaseLock()
 
       toast({ title: 'Post created successfully' })
       onPostCreated?.()
 
-      // Reset local state
-      setBlocks([{ type: 'action', content: '', order: 0 }])
+      // Reset to empty state
+      setBlocks([])
       setOocText('')
       setMode('narrative')
     } catch (error) {
@@ -183,10 +235,10 @@ export function ImmersiveComposer({
     }
   }
 
-  // If no character is selected, show minimal UI
-  if (!character) {
+  // If no character is selected and not narrator mode, show minimal UI
+  if (!character && !isNarrator) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
+      <div className="fixed bottom-0 left-0 right-0 p-4 lg:pr-72 z-40">
         <div className="max-w-4xl mx-auto">
           <div className="bg-panel backdrop-blur-md rounded-2xl border border-border/50 px-4 py-3 text-center">
             <span className="text-sm text-muted-foreground">
@@ -201,7 +253,7 @@ export function ImmersiveComposer({
   // Show locked by other player state
   if (externalLocked && !hasLock) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
+      <div className="fixed bottom-0 left-0 right-0 p-4 lg:pr-72 z-40">
         <div className="max-w-4xl mx-auto">
           <div className="bg-panel backdrop-blur-md rounded-2xl border border-border/50 px-4 py-3">
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
@@ -219,14 +271,14 @@ export function ImmersiveComposer({
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
+    <div className="fixed bottom-0 left-0 right-0 p-4 lg:pr-72 z-40">
       <div className="max-w-4xl mx-auto">
         <div className="bg-panel backdrop-blur-md rounded-2xl border border-border/50 overflow-hidden">
-          {/* Lock timer bar */}
-          {hasLock && remainingSeconds > 0 && (
+          {/* Lock timer bar (not shown for narrator mode) */}
+          {hasLock && !isNarrator && remainingSeconds > 0 && (
             <LockTimerBar
               timeRemaining={remainingSeconds}
-              totalTime={600} // 10 minutes
+              totalTime={600}
             />
           )}
 
@@ -234,7 +286,7 @@ export function ImmersiveComposer({
             // Not locked - show acquire button
             <div className="p-4 flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
-                Ready to write as {character.display_name}
+                Ready to write as {displayName}
               </span>
               <Button
                 variant="outline"
@@ -272,21 +324,74 @@ export function ImmersiveComposer({
                 </Tabs>
               </div>
 
-              {/* Text area */}
+              {/* Content area */}
               <div className="p-4 pt-2">
-                <Textarea
-                  placeholder={
-                    mode === 'narrative'
-                      ? 'Write your action or dialogue...'
-                      : 'Out of character message...'
-                  }
-                  value={content}
-                  onChange={(e) => handleContentChange(e.target.value)}
-                  className="min-h-[80px] bg-transparent border-0 resize-none focus-visible:ring-0 p-0"
-                />
+                {mode === 'narrative' ? (
+                  // Narrative mode - show blocks
+                  <div className="space-y-2">
+                    {blocks.length === 0 ? (
+                      // Empty state - prompt to add block
+                      <div className="text-center py-4 text-muted-foreground text-sm">
+                        Add an action or dialog block to begin
+                      </div>
+                    ) : (
+                      // Render blocks
+                      blocks.map((block, index) => (
+                        <div
+                          key={index}
+                          className="flex items-start gap-2 group"
+                        >
+                          {/* Block type icon */}
+                          <div className="flex-shrink-0 mt-2">
+                            {block.type === 'action' ? (
+                              <Swords className="h-4 w-4 text-amber-500" />
+                            ) : (
+                              <Quote className="h-4 w-4 text-blue-400" />
+                            )}
+                          </div>
+                          {/* Block textarea */}
+                          <Textarea
+                            ref={(el) => {
+                              if (el) {
+                                textareaRefs.current.set(index, el)
+                              } else {
+                                textareaRefs.current.delete(index)
+                              }
+                            }}
+                            placeholder={
+                              block.type === 'action'
+                                ? 'Describe what you do...'
+                                : 'Say something...'
+                            }
+                            value={block.content}
+                            onChange={(e) => updateBlock(index, e.target.value)}
+                            className="flex-1 min-h-[60px] bg-secondary/30 border-border/50 resize-none text-sm"
+                          />
+                          {/* Delete button */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="flex-shrink-0 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => deleteBlock(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                ) : (
+                  // OOC mode - simple textarea
+                  <Textarea
+                    placeholder="Out of character message..."
+                    value={oocText}
+                    onChange={(e) => setOocText(e.target.value)}
+                    className="min-h-[80px] bg-transparent border-0 resize-none focus-visible:ring-0 p-0"
+                  />
+                )}
               </div>
 
-              {/* Intention selector */}
+              {/* Intention selector (only in narrative mode with intentions configured) */}
               {mode === 'narrative' &&
                 settings.systemPreset?.intentions?.length > 0 && (
                   <div className="px-4 pb-2">
@@ -313,34 +418,32 @@ export function ImmersiveComposer({
 
               {/* Toolbar */}
               <div className="px-4 pb-3 flex items-center justify-between">
-                {/* Block type buttons */}
+                {/* Add block buttons (only in narrative mode) */}
                 <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => {
-                      if (blocks[0]) {
-                        setBlocks([{ ...blocks[0], type: 'action' }])
-                      }
-                    }}
-                  >
-                    <Swords className="h-4 w-4 mr-1" />
-                    Action
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => {
-                      if (blocks[0]) {
-                        setBlocks([{ ...blocks[0], type: 'dialog' }])
-                      }
-                    }}
-                  >
-                    <Quote className="h-4 w-4 mr-1" />
-                    Dialog
-                  </Button>
+                  {mode === 'narrative' && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        onClick={() => addBlock('action')}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        <Swords className="h-4 w-4 mr-1" />
+                        Action
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        onClick={() => addBlock('dialog')}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        <Quote className="h-4 w-4 mr-1" />
+                        Dialog
+                      </Button>
+                    </>
+                  )}
                   {settings.hiddenPosts && (
                     <Button
                       variant={isHidden ? 'secondary' : 'ghost'}
@@ -356,14 +459,18 @@ export function ImmersiveComposer({
 
                 {/* Release and send */}
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={releaseLock}>
+                  <Button variant="ghost" size="sm" onClick={handleReleaseLock}>
                     <Unlock className="h-4 w-4 mr-1" />
                     Release
                   </Button>
                   <Button
                     size="sm"
                     onClick={handleSubmit}
-                    disabled={!content.trim() || isSubmitting}
+                    disabled={
+                      (mode === 'narrative' && !hasBlockContent) ||
+                      (mode === 'ooc' && !oocText.trim()) ||
+                      isSubmitting
+                    }
                   >
                     {isSubmitting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

@@ -34,9 +34,10 @@ interface CharacterManagerProps {
   campaignId: string
   isGM: boolean
   members: CampaignMember[]
+  characterTypeFilter?: 'pc' | 'npc'
 }
 
-export function CharacterManager({ campaignId, isGM, members }: CharacterManagerProps) {
+export function CharacterManager({ campaignId, isGM, members, characterTypeFilter }: CharacterManagerProps) {
   const { toast } = useToast()
   const {
     characters,
@@ -71,12 +72,15 @@ export function CharacterManager({ campaignId, isGM, members }: CharacterManager
     })
   }, [campaignId, fetchCharacters, toast])
 
-  const visibleCharacters = characters.filter((c) => showArchived || !c.is_archived)
+  const visibleCharacters = characters.filter((c) => {
+    if (characterTypeFilter && c.character_type !== characterTypeFilter) return false
+    return showArchived || !c.is_archived
+  })
 
   const resetForm = () => {
     setDisplayName('')
     setDescription('')
-    setCharacterType('pc')
+    setCharacterType(characterTypeFilter || 'pc')
     setAssignToUser('')
   }
 
@@ -88,7 +92,7 @@ export function CharacterManager({ campaignId, isGM, members }: CharacterManager
         displayName: displayName.trim(),
         description: description.trim(),
         characterType,
-        assignToUser: assignToUser || undefined,
+        assignToUser: assignToUser && assignToUser !== 'unassigned' ? assignToUser : undefined,
       }
       await createCharacter(campaignId, data)
       toast({ title: 'Character created' })
@@ -190,25 +194,36 @@ export function CharacterManager({ campaignId, isGM, members }: CharacterManager
 
   const playerMembers = members.filter((m) => m.role === 'player')
 
+  // Determine title and counts based on filter
+  const filteredCount = visibleCharacters.length
+  const typeLabel = characterTypeFilter === 'pc' ? 'PCs' : characterTypeFilter === 'npc' ? 'NPCs' : 'Characters'
+  const singularLabel = characterTypeFilter === 'pc' ? 'PC' : characterTypeFilter === 'npc' ? 'NPC' : 'character'
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle>Characters</CardTitle>
-          <CardDescription>{characters.length} characters in campaign</CardDescription>
+          <CardTitle>{typeLabel}</CardTitle>
+          <CardDescription>{filteredCount} {filteredCount === 1 ? singularLabel : typeLabel.toLowerCase()} in campaign</CardDescription>
         </div>
         {isGM && (
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <Dialog open={createDialogOpen} onOpenChange={(open) => {
+            setCreateDialogOpen(open)
+            if (open) {
+              // Reset form with correct character type when opening
+              setCharacterType(characterTypeFilter || 'pc')
+            }
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Create Character
+                Create {characterTypeFilter === 'npc' ? 'NPC' : characterTypeFilter === 'pc' ? 'PC' : 'Character'}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create Character</DialogTitle>
-                <DialogDescription>Add a new character to the campaign.</DialogDescription>
+                <DialogTitle>Create {characterTypeFilter === 'npc' ? 'NPC' : characterTypeFilter === 'pc' ? 'PC' : 'Character'}</DialogTitle>
+                <DialogDescription>Add a new {characterTypeFilter === 'npc' ? 'NPC' : characterTypeFilter === 'pc' ? 'PC' : 'character'} to the campaign.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -232,18 +247,20 @@ export function CharacterManager({ campaignId, isGM, members }: CharacterManager
                     rows={3}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="characterType">Type</Label>
-                  <Select value={characterType} onValueChange={(v) => setCharacterType(v as CharacterType)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pc">PC (Player Character)</SelectItem>
-                      <SelectItem value="npc">NPC (Non-Player Character)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!characterTypeFilter && (
+                  <div className="space-y-2">
+                    <Label htmlFor="characterType">Type</Label>
+                    <Select value={characterType} onValueChange={(v) => setCharacterType(v as CharacterType)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pc">PC (Player Character)</SelectItem>
+                        <SelectItem value="npc">NPC (Non-Player Character)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 {playerMembers.length > 0 && (
                   <div className="space-y-2">
                     <Label htmlFor="assignTo">Assign to Player (optional)</Label>
@@ -252,7 +269,7 @@ export function CharacterManager({ campaignId, isGM, members }: CharacterManager
                         <SelectValue placeholder="Select a player" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
                         {playerMembers.map((member) => (
                           <SelectItem key={member.user_id} value={member.user_id}>
                             Player {member.user_id.slice(0, 8)}...
@@ -284,7 +301,9 @@ export function CharacterManager({ campaignId, isGM, members }: CharacterManager
         )}
 
         {visibleCharacters.length === 0 ? (
-          <p className="py-4 text-center text-muted-foreground">No characters yet. Create one to get started.</p>
+          <p className="py-4 text-center text-muted-foreground">
+            No {typeLabel.toLowerCase()} yet. {isGM ? `Create one to get started.` : `The GM hasn't created any ${typeLabel.toLowerCase()} yet.`}
+          </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {visibleCharacters.map((character) => (

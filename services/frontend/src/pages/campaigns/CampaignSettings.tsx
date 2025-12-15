@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,6 +7,7 @@ import { useCampaignStore } from '@/stores/campaignStore'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Separator } from '@/components/ui/separator'
 import {
   Form,
   FormControl,
@@ -25,10 +26,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Pause, Play, Trash2, Crown } from 'lucide-react'
 import { ManagementLayout } from '@/components/layout'
 import { CampaignHeaderCompact } from '@/components/campaign'
+import { StorageIndicator } from '@/components/image/StorageIndicator'
 
 const settingsSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255),
@@ -51,7 +63,24 @@ export default function CampaignSettings() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { currentCampaign, loadingCampaign, fetchCampaign, updateCampaign } = useCampaignStore()
+  const {
+    currentCampaign,
+    members,
+    loadingCampaign,
+    fetchCampaign,
+    fetchMembers,
+    updateCampaign,
+    pauseCampaign,
+    resumeCampaign,
+    deleteCampaign,
+    transferGm,
+  } = useCampaignStore()
+
+  // Dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteConfirmTitle, setDeleteConfirmTitle] = useState('')
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false)
+  const [selectedMemberForTransfer, setSelectedMemberForTransfer] = useState<string | null>(null)
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsSchema),
@@ -67,8 +96,62 @@ export default function CampaignSettings() {
   useEffect(() => {
     if (id) {
       fetchCampaign(id)
+      fetchMembers(id)
     }
-  }, [id, fetchCampaign])
+  }, [id, fetchCampaign, fetchMembers])
+
+  const isPaused = currentCampaign?.is_paused ?? false
+
+  async function handlePauseResume() {
+    if (!currentCampaign || !id) return
+    try {
+      if (isPaused) {
+        await resumeCampaign(id)
+        toast({ title: 'Campaign resumed', description: 'The campaign is now active again.' })
+      } else {
+        await pauseCampaign(id)
+        toast({ title: 'Campaign paused', description: 'Time gates are now frozen.' })
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to update campaign',
+        description: (error as Error).message,
+      })
+    }
+  }
+
+  async function handleDelete() {
+    if (!currentCampaign || !id) return
+    try {
+      await deleteCampaign(id, deleteConfirmTitle)
+      toast({ title: 'Campaign deleted', description: 'The campaign has been permanently deleted.' })
+      navigate('/')
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to delete campaign',
+        description: (error as Error).message,
+      })
+    }
+  }
+
+  async function handleTransferGm() {
+    if (!selectedMemberForTransfer || !id) return
+    try {
+      await transferGm(id, selectedMemberForTransfer)
+      toast({ title: 'GM role transferred' })
+      setTransferDialogOpen(false)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to transfer GM role',
+        description: (error as Error).message,
+      })
+    }
+  }
+
+  const playerMembers = members.filter((m) => m.role === 'player')
 
   useEffect(() => {
     if (currentCampaign) {
@@ -270,6 +353,84 @@ export default function CampaignSettings() {
             </CardContent>
           </Card>
 
+          {/* Campaign Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-display">Campaign Status</CardTitle>
+              <CardDescription>Storage usage and campaign state</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <StorageIndicator campaignId={id!} />
+              <Separator />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-medium">Pause Campaign</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Freeze time gates and prevent new posts
+                  </p>
+                </div>
+                <Button variant="outline" onClick={handlePauseResume} type="button">
+                  {isPaused ? (
+                    <Play className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Pause className="mr-2 h-4 w-4" />
+                  )}
+                  {isPaused ? 'Resume' : 'Pause'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle className="font-display text-destructive">Danger Zone</CardTitle>
+              <CardDescription>Irreversible actions</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Transfer GM Role */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-medium flex items-center gap-2">
+                    <Crown className="h-4 w-4" />
+                    Transfer GM Role
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    Transfer ownership to another player
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setTransferDialogOpen(true)}
+                  disabled={playerMembers.length === 0}
+                  type="button"
+                >
+                  Transfer
+                </Button>
+              </div>
+              <Separator />
+              {/* Delete Campaign */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-medium flex items-center gap-2 text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                    Delete Campaign
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    Permanently delete this campaign and all its data
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  type="button"
+                >
+                  Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Submit */}
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
             <Button type="button" variant="outline" asChild>
@@ -282,6 +443,77 @@ export default function CampaignSettings() {
           </div>
         </form>
       </Form>
+
+      {/* Delete Campaign Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Campaign</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the campaign and all
+              associated data including scenes, posts, and characters.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              Type <strong>{currentCampaign.title}</strong> to confirm:
+            </p>
+            <Input
+              value={deleteConfirmTitle}
+              onChange={(e) => setDeleteConfirmTitle(e.target.value)}
+              placeholder="Campaign title"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmTitle('')}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteConfirmTitle !== currentCampaign.title}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Campaign
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Transfer GM Role Dialog */}
+      <AlertDialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Transfer GM Role</AlertDialogTitle>
+            <AlertDialogDescription>
+              Select a player to transfer the GM role to. You will become a player in this
+              campaign.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Select
+              value={selectedMemberForTransfer || ''}
+              onValueChange={setSelectedMemberForTransfer}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a player" />
+              </SelectTrigger>
+              <SelectContent>
+                {playerMembers.map((member) => (
+                  <SelectItem key={member.user_id} value={member.user_id}>
+                    Player ({member.user_id.slice(0, 8)}...)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedMemberForTransfer(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleTransferGm} disabled={!selectedMemberForTransfer}>
+              Transfer GM Role
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ManagementLayout>
   )
 }

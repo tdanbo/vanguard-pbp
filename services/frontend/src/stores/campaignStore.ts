@@ -748,10 +748,11 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   transitionPhase: async (campaignId: string, toPhase: CampaignPhase) => {
     set({ loadingPhase: true, error: null })
     try {
-      const campaign = await api<Campaign>(`/api/v1/campaigns/${campaignId}/phase/transition`, {
+      const response = await api<{ message: string; campaign: Campaign }>(`/api/v1/campaigns/${campaignId}/phase/transition`, {
         method: 'POST',
         body: { toPhase },
       })
+      const campaign = response.campaign
       set((state) => ({
         campaigns: state.campaigns.map((c) => (c.id === campaignId ? campaign : c)),
         currentCampaign: state.currentCampaign?.id === campaignId ? campaign : state.currentCampaign,
@@ -769,10 +770,11 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   forceTransitionPhase: async (campaignId: string, toPhase: CampaignPhase) => {
     set({ loadingPhase: true, error: null })
     try {
-      const campaign = await api<Campaign>(`/api/v1/campaigns/${campaignId}/phase/force-transition`, {
+      const response = await api<{ message: string; campaign: Campaign }>(`/api/v1/campaigns/${campaignId}/phase/force-transition`, {
         method: 'POST',
         body: { toPhase },
       })
+      const campaign = response.campaign
       set((state) => ({
         campaigns: state.campaigns.map((c) => (c.id === campaignId ? campaign : c)),
         currentCampaign: state.currentCampaign?.id === campaignId ? campaign : state.currentCampaign,
