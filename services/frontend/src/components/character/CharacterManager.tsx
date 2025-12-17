@@ -234,6 +234,7 @@ export function CharacterManager({ campaignId, isGM, members, scenes = [], chara
           characters={visibleCharacters}
           isGM={isGM}
           members={members}
+          scenes={scenes}
           onEdit={openEditDialog}
           onArchive={handleArchive}
           onAssign={openAssignDialog}

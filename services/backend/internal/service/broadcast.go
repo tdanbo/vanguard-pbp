@@ -177,7 +177,8 @@ func (s *BroadcastService) BroadcastPhaseTransition(
 
 	channel := fmt.Sprintf("campaign:%s", uuidToString(campaignID))
 	if err := s.broadcastMessage(ctx, channel, EventPhaseTransition, event); err != nil {
-		slog.Error("Failed to broadcast phase transition", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast phase transition", "error", err)
 	}
 }
 
@@ -206,7 +207,8 @@ func (s *BroadcastService) BroadcastPostCreated(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventPostCreated, event); err != nil {
-		slog.Error("Failed to broadcast post created", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast post created", "error", err)
 	}
 }
 
@@ -225,7 +227,8 @@ func (s *BroadcastService) BroadcastPostUpdated(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventPostUpdated, event); err != nil {
-		slog.Error("Failed to broadcast post updated", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast post updated", "error", err)
 	}
 }
 
@@ -244,7 +247,8 @@ func (s *BroadcastService) BroadcastPostDeleted(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventPostDeleted, event); err != nil {
-		slog.Error("Failed to broadcast post deleted", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast post deleted", "error", err)
 	}
 }
 
@@ -263,7 +267,8 @@ func (s *BroadcastService) BroadcastComposeLockAcquired(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventComposeLockAcquired, event); err != nil {
-		slog.Error("Failed to broadcast compose lock acquired", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast compose lock acquired", "error", err)
 	}
 }
 
@@ -282,7 +287,8 @@ func (s *BroadcastService) BroadcastComposeLockReleased(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventComposeLockReleased, event); err != nil {
-		slog.Error("Failed to broadcast compose lock released", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast compose lock released", "error", err)
 	}
 }
 
@@ -304,12 +310,14 @@ func (s *BroadcastService) BroadcastPassStateChanged(
 	// Broadcast to both scene and campaign channels
 	sceneChannel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, sceneChannel, EventPassStateChanged, event); err != nil {
-		slog.Error("Failed to broadcast pass state to scene", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast pass state to scene", "error", err)
 	}
 
 	campaignChannel := fmt.Sprintf("campaign:%s", uuidToString(campaignID))
 	if err := s.broadcastMessage(ctx, campaignChannel, EventPassStateChanged, event); err != nil {
-		slog.Error("Failed to broadcast pass state to campaign", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast pass state to campaign", "error", err)
 	}
 }
 
@@ -328,7 +336,8 @@ func (s *BroadcastService) BroadcastCharacterJoinedScene(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventCharacterJoined, event); err != nil {
-		slog.Error("Failed to broadcast character joined", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast character joined", "error", err)
 	}
 }
 
@@ -347,7 +356,8 @@ func (s *BroadcastService) BroadcastCharacterLeftScene(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventCharacterLeft, event); err != nil {
-		slog.Error("Failed to broadcast character left", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast character left", "error", err)
 	}
 }
 
@@ -371,7 +381,8 @@ func (s *BroadcastService) BroadcastRollCreated(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventRollCreated, event); err != nil {
-		slog.Error("Failed to broadcast roll created", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast roll created", "error", err)
 	}
 }
 
@@ -392,7 +403,8 @@ func (s *BroadcastService) BroadcastRollResolved(
 
 	channel := fmt.Sprintf("scene:%s", uuidToString(sceneID))
 	if err := s.broadcastMessage(ctx, channel, EventRollResolved, event); err != nil {
-		slog.Error("Failed to broadcast roll resolved", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast roll resolved", "error", err)
 	}
 }
 
@@ -411,6 +423,7 @@ func (s *BroadcastService) BroadcastTimeGateWarning(
 
 	channel := fmt.Sprintf("campaign:%s", uuidToString(campaignID))
 	if err := s.broadcastMessage(ctx, channel, EventTimeGateWarning, event); err != nil {
-		slog.Error("Failed to broadcast time gate warning", "error", err)
+		//nolint:sloglint // Error logging in broadcast doesn't need structured logger injection
+		slog.ErrorContext(ctx, "Failed to broadcast time gate warning", "error", err)
 	}
 }

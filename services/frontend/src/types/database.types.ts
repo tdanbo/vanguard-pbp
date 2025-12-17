@@ -260,6 +260,7 @@ export type Database = {
           character_id: string
           expires_at: string
           id: string
+          is_hidden: boolean
           last_activity_at: string
           scene_id: string
           user_id: string
@@ -269,6 +270,7 @@ export type Database = {
           character_id: string
           expires_at: string
           id?: string
+          is_hidden?: boolean
           last_activity_at?: string
           scene_id: string
           user_id: string
@@ -278,6 +280,7 @@ export type Database = {
           character_id?: string
           expires_at?: string
           id?: string
+          is_hidden?: boolean
           last_activity_at?: string
           scene_id?: string
           user_id?: string
@@ -298,6 +301,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      email_digests: {
+        Row: {
+          campaign_ids: string[]
+          digest_type: string
+          id: string
+          notification_count: number
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_ids: string[]
+          digest_type: string
+          id?: string
+          notification_count: number
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_ids?: string[]
+          digest_type?: string
+          id?: string
+          notification_count?: number
+          sent_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       invite_links: {
         Row: {
@@ -373,14 +403,54 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_queue: {
+        Row: {
+          deliver_after: string
+          delivered_at: string | null
+          id: string
+          notification_id: string
+          queued_at: string
+          user_id: string
+        }
+        Insert: {
+          deliver_after: string
+          delivered_at?: string | null
+          id?: string
+          notification_id: string
+          queued_at?: string
+          user_id: string
+        }
+        Update: {
+          deliver_after?: string
+          delivered_at?: string | null
+          id?: string
+          notification_id?: string
+          queued_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_queue_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: true
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string
           campaign_id: string | null
+          character_id: string | null
           created_at: string
           email_sent_at: string | null
+          expires_at: string | null
           id: string
           is_read: boolean
+          is_urgent: boolean
+          link: string | null
+          metadata: Json | null
           post_id: string | null
           read_at: string | null
           scene_id: string | null
@@ -391,10 +461,15 @@ export type Database = {
         Insert: {
           body: string
           campaign_id?: string | null
+          character_id?: string | null
           created_at?: string
           email_sent_at?: string | null
+          expires_at?: string | null
           id?: string
           is_read?: boolean
+          is_urgent?: boolean
+          link?: string | null
+          metadata?: Json | null
           post_id?: string | null
           read_at?: string | null
           scene_id?: string | null
@@ -405,10 +480,15 @@ export type Database = {
         Update: {
           body?: string
           campaign_id?: string | null
+          character_id?: string | null
           created_at?: string
           email_sent_at?: string | null
+          expires_at?: string | null
           id?: string
           is_read?: boolean
+          is_urgent?: boolean
+          link?: string | null
+          metadata?: Json | null
           post_id?: string | null
           read_at?: string | null
           scene_id?: string | null
@@ -422,6 +502,13 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_character_id_fkey"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
             referencedColumns: ["id"]
           },
           {
@@ -521,6 +608,7 @@ export type Database = {
           start_time: string
           timezone: string
           updated_at: string
+          urgent_bypass: boolean
           user_id: string
         }
         Insert: {
@@ -531,6 +619,7 @@ export type Database = {
           start_time?: string
           timezone?: string
           updated_at?: string
+          urgent_bypass?: boolean
           user_id: string
         }
         Update: {
@@ -541,6 +630,7 @@ export type Database = {
           start_time?: string
           timezone?: string
           updated_at?: string
+          urgent_bypass?: boolean
           user_id?: string
         }
         Relationships: []
@@ -553,11 +643,18 @@ export type Database = {
           dice_type: string
           id: string
           intention: string
+          manual_resolution_reason: string | null
+          manual_result: number | null
+          manually_resolved_by: string | null
           modifier: number
           original_intention: string | null
+          overridden_by: string | null
+          override_reason: string | null
+          override_timestamp: string | null
           post_id: string | null
           requested_by: string | null
           result: number[] | null
+          rolled_at: string | null
           scene_id: string
           status: Database["public"]["Enums"]["roll_status"]
           total: number | null
@@ -570,11 +667,18 @@ export type Database = {
           dice_type: string
           id?: string
           intention: string
+          manual_resolution_reason?: string | null
+          manual_result?: number | null
+          manually_resolved_by?: string | null
           modifier?: number
           original_intention?: string | null
+          overridden_by?: string | null
+          override_reason?: string | null
+          override_timestamp?: string | null
           post_id?: string | null
           requested_by?: string | null
           result?: number[] | null
+          rolled_at?: string | null
           scene_id: string
           status?: Database["public"]["Enums"]["roll_status"]
           total?: number | null
@@ -587,11 +691,18 @@ export type Database = {
           dice_type?: string
           id?: string
           intention?: string
+          manual_resolution_reason?: string | null
+          manual_result?: number | null
+          manually_resolved_by?: string | null
           modifier?: number
           original_intention?: string | null
+          overridden_by?: string | null
+          override_reason?: string | null
+          override_timestamp?: string | null
           post_id?: string | null
           requested_by?: string | null
           result?: number[] | null
+          rolled_at?: string | null
           scene_id?: string
           status?: Database["public"]["Enums"]["roll_status"]
           total?: number | null
@@ -673,7 +784,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_notifications: { Args: never; Returns: number }
+      get_notifications_ready_for_delivery: {
+        Args: never
+        Returns: {
+          deliver_after: string
+          delivered_at: string | null
+          id: string
+          notification_id: string
+          queued_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notification_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       bookmark_type: "character" | "scene" | "post"

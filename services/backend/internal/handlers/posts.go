@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +20,8 @@ func emptyUUID() pgtype.UUID {
 }
 
 // CreatePost creates a new post.
+//
+//nolint:gocognit // Complex handler with broadcasting logic
 func CreatePost(db *database.DB) gin.HandlerFunc {
 	svc := service.NewPostService(db.Pool)
 	queries := generated.New(db.Pool)
@@ -44,11 +46,17 @@ func CreatePost(db *database.DB) gin.HandlerFunc {
 		}
 
 		userID := parseUUID(userIDStr)
-		log.Printf("[DEBUG] CreatePost request: sceneId=%s, characterId=%v, blocks=%d, isHidden=%v",
-			req.SceneID, req.CharacterID, len(req.Blocks), req.IsHidden)
-		resp, err := svc.CreatePost(c.Request.Context(), userID, req, submitImmediately)
+		ctx := c.Request.Context()
+		//nolint:sloglint // Debug logging doesn't need structured logger injection
+		slog.DebugContext(ctx, "CreatePost request",
+			"sceneId", req.SceneID,
+			"characterId", req.CharacterID,
+			"blocks", len(req.Blocks),
+			"isHidden", req.IsHidden)
+		resp, err := svc.CreatePost(ctx, userID, req, submitImmediately)
 		if err != nil {
-			log.Printf("[ERROR] CreatePost failed: %v", err)
+			//nolint:sloglint // Error logging doesn't need structured logger injection
+			slog.ErrorContext(ctx, "CreatePost failed", "error", err)
 			handlePostError(c, err)
 			return
 		}
@@ -395,8 +403,9 @@ func handlePostError(c *gin.Context, err error) {
 		)
 	default:
 		// Log the actual error for debugging
-		log.Printf("[ERROR] CreatePost unhandled error: %v", err)
-		c.Error(err)
+		//nolint:sloglint // Error logging doesn't need structured logger injection
+		slog.ErrorContext(c.Request.Context(), "handlePostError unhandled error", "error", err)
+		_ = c.Error(err)
 		models.InternalError(c)
 	}
 }

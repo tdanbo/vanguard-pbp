@@ -27,7 +27,7 @@ export function SceneMenu({
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full bg-panel backdrop-blur-sm border border-border/50"
+          className="rounded-full bg-background/40 backdrop-blur-md border border-border/30"
         >
           <MoreHorizontal className="h-5 w-5" />
         </Button>

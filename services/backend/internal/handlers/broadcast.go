@@ -9,6 +9,7 @@ import (
 	"github.com/tdanbo/vanguard-pbp/services/backend/internal/service"
 )
 
+//nolint:gochecknoglobals // Singleton pattern for broadcast service
 var (
 	broadcastService *service.BroadcastService
 	broadcastOnce    sync.Once

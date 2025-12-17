@@ -2,7 +2,7 @@ import { CharacterPortrait } from '@/components/character/CharacterPortrait'
 import { PassBadge } from '@/components/ui/game-badges'
 import { BookOpen, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { CampaignPhase, PassState, CharacterType } from '@/types'
+import type { PassState, CharacterType } from '@/types'
 
 export interface PartyBubbleCharacter {
   id: string
@@ -15,7 +15,6 @@ export interface PartyBubbleCharacter {
 
 interface PartyBubblesProps {
   characters: PartyBubbleCharacter[]
-  phase: CampaignPhase | 'paused'
   isGM: boolean
   selectedCharacterId: string | null
   onSelectCharacter: (characterId: string) => void
@@ -26,7 +25,6 @@ interface PartyBubblesProps {
 
 export function PartyBubbles({
   characters,
-  phase: _phase, // Reserved for future phase indicator
   isGM,
   selectedCharacterId,
   onSelectCharacter,
@@ -246,13 +244,9 @@ function AddNPCBubble({ onClick }: AddNPCBubbleProps) {
       className="flex flex-col items-center gap-1 transition-all cursor-pointer hover:scale-105"
       title="Add NPC to scene"
     >
-      {/* Plus icon bubble */}
-      <div className="w-12 h-12 rounded-full flex items-center justify-center transition-all bg-secondary/50 border-2 border-dashed border-border/50 hover:border-gold/50 hover:bg-secondary">
+      <div className="h-10 w-10 rounded-full flex items-center justify-center transition-all bg-background/40 backdrop-blur-md border border-border/30 hover:border-gold/50 hover:bg-background/60">
         <Plus className="h-5 w-5 text-muted-foreground" />
       </div>
-
-      {/* Label */}
-      <span className="text-xs text-muted-foreground">Add</span>
     </button>
   )
 }
@@ -268,13 +262,9 @@ function AddPCBubble({ onClick }: AddPCBubbleProps) {
       className="flex flex-col items-center gap-1 transition-all cursor-pointer hover:scale-105"
       title="Add PC to scene"
     >
-      {/* Plus icon bubble */}
-      <div className="w-12 h-12 rounded-full flex items-center justify-center transition-all bg-secondary/50 border-2 border-dashed border-border/50 hover:border-gold/50 hover:bg-secondary">
+      <div className="h-10 w-10 rounded-full flex items-center justify-center transition-all bg-background/40 backdrop-blur-md border border-border/30 hover:border-gold/50 hover:bg-background/60">
         <Plus className="h-5 w-5 text-muted-foreground" />
       </div>
-
-      {/* Label */}
-      <span className="text-xs text-muted-foreground">Add</span>
     </button>
   )
 }

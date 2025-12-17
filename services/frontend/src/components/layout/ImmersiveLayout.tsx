@@ -30,7 +30,7 @@ export function ImmersiveLayout({
             <img
               src={backgroundImage}
               alt=""
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover object-top opacity-50"
             />
             {/* Gradient overlay to fade into background */}
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/50 to-background" />
@@ -45,7 +45,7 @@ export function ImmersiveLayout({
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full bg-panel backdrop-blur-sm border border-border/50 pointer-events-auto"
+          className="rounded-full bg-background/40 backdrop-blur-md border border-border/30 pointer-events-auto"
           onClick={handleBack}
           aria-label={backLabel}
         >

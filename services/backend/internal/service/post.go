@@ -14,12 +14,12 @@ import (
 
 // Post errors.
 var (
-	ErrPostNotFound       = errors.New("post not found")
-	ErrPostLocked         = errors.New("post is locked and cannot be edited")
-	ErrNotPostOwner       = errors.New("you do not own this post")
-	ErrCannotEditAsGM     = errors.New("GMs cannot edit player posts")
-	ErrNotInCorrectPhase  = errors.New("action not allowed in current phase")
-	ErrNotMostRecentPost  = errors.New("can only edit the most recent post")
+	ErrPostNotFound      = errors.New("post not found")
+	ErrPostLocked        = errors.New("post is locked and cannot be edited")
+	ErrNotPostOwner      = errors.New("you do not own this post")
+	ErrCannotEditAsGM    = errors.New("GMs cannot edit player posts")
+	ErrNotInCorrectPhase = errors.New("action not allowed in current phase")
+	ErrNotMostRecentPost = errors.New("can only edit the most recent post")
 )
 
 // PostService handles post business logic.
@@ -348,6 +348,8 @@ type UpdatePostRequest struct {
 }
 
 // UpdatePost updates a post (only unlocked posts can be edited).
+//
+//nolint:gocognit // Complex update logic with multiple validation checks
 func (s *PostService) UpdatePost(
 	ctx context.Context,
 	userID pgtype.UUID,

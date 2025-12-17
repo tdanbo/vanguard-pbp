@@ -228,6 +228,7 @@ func (s *NotificationService) queueForLater(ctx context.Context, notification *g
 		DeliverAfter:   pgtype.Timestamptz{Time: deliveryTime.UTC(), Valid: true, InfinityModifier: pgtype.Finite},
 	})
 	if err != nil {
+		//nolint:sloglint // Error logging doesn't need structured logger injection
 		slog.Error("Failed to queue notification", "error", err)
 	}
 }
@@ -238,8 +239,10 @@ func (s *NotificationService) sendImmediateEmail(ctx context.Context, notificati
 	// For now, just mark as sent
 	err := s.queries.MarkNotificationEmailSent(ctx, notification.ID)
 	if err != nil {
+		//nolint:sloglint // Error logging doesn't need structured logger injection
 		slog.Error("Failed to mark notification email as sent", "error", err)
 	}
+	//nolint:sloglint // Info logging doesn't need structured logger injection
 	slog.Info("Would send email for notification", "id", notification.ID.Bytes, "title", notification.Title)
 }
 
@@ -268,6 +271,7 @@ func (s *NotificationService) NotifyPCPhaseStarted(
 			IsUrgent:    true,
 			Metadata:    nil,
 		}); createErr != nil {
+			//nolint:sloglint // Error logging doesn't need structured logger injection
 			slog.Error("Failed to notify user", "user", uuidToString(pc.UserID), "error", createErr)
 		}
 	}
@@ -276,6 +280,8 @@ func (s *NotificationService) NotifyPCPhaseStarted(
 }
 
 // NotifyNewPostInScene notifies users in a scene about a new post.
+//
+//nolint:gocognit,nestif // Complex notification logic with witness filtering
 func (s *NotificationService) NotifyNewPostInScene(
 	ctx context.Context,
 	post *generated.Post,
@@ -344,6 +350,7 @@ func (s *NotificationService) NotifyNewPostInScene(
 			IsUrgent: false,
 			Metadata: nil,
 		}); createErr != nil {
+			//nolint:sloglint // Error logging doesn't need structured logger injection
 			slog.Error("Failed to notify user", "error", createErr)
 		}
 	}
@@ -454,6 +461,7 @@ func (s *NotificationService) NotifyTimeGateWarning(
 			IsUrgent: hoursRemaining <= timeGateWarning1h,
 			Metadata: nil,
 		}); createErr != nil {
+			//nolint:sloglint // Error logging doesn't need structured logger injection
 			slog.Error("Failed to notify user", "error", createErr)
 		}
 	}
@@ -544,6 +552,7 @@ func (s *NotificationService) NotifyComposeLockReleased(
 			IsUrgent:    false,
 			Metadata:    nil,
 		}); createErr != nil {
+			//nolint:sloglint // Error logging doesn't need structured logger injection
 			slog.Error("Failed to notify user", "error", createErr)
 		}
 	}

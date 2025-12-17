@@ -191,6 +191,7 @@ export function SceneHeaderUploader({
           // Show confirm/cancel buttons when there's a pending file
           <>
             <Button
+              type="button"
               variant="default"
               size="sm"
               onClick={handleConfirmUpload}
@@ -209,6 +210,7 @@ export function SceneHeaderUploader({
               )}
             </Button>
             <Button
+              type="button"
               variant="outline"
               size="sm"
               onClick={handleCancel}
@@ -222,6 +224,7 @@ export function SceneHeaderUploader({
           // Show upload/change/remove buttons when no pending file
           <>
             <Button
+              type="button"
               variant="outline"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
@@ -233,6 +236,7 @@ export function SceneHeaderUploader({
 
             {savedUrl && (
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleDelete}

@@ -19,7 +19,7 @@ export function SceneHeader({ scene, className }: SceneHeaderProps) {
             <img
               src={scene.header_image_url}
               alt=""
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover object-top"
             />
             {/* Gradient overlay */}
             <div className="absolute inset-0 scene-gradient" />

@@ -16,9 +16,10 @@ import {
   User,
   UserX,
   Crown,
+  BookOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { Character, CampaignMember } from "@/types"
+import type { Character, CampaignMember, Scene } from "@/types"
 
 // Gradient colors for avatar fallback (same as CharacterPortrait)
 const gradients = [
@@ -50,6 +51,7 @@ interface CharacterCardProps {
   character: Character
   isGM: boolean
   members: CampaignMember[]
+  sceneName?: string | null
   onEdit: () => void
   onArchive: () => void
   onAssign: () => void
@@ -61,6 +63,7 @@ export function CharacterCard({
   character,
   isGM,
   members,
+  sceneName,
   onEdit,
   onArchive,
   onAssign,
@@ -81,8 +84,8 @@ export function CharacterCard({
         className
       )}
     >
-      {/* Portrait header with 4:5 aspect ratio */}
-      <div className="aspect-[4/5] relative">
+      {/* Portrait header - compact square aspect ratio */}
+      <div className="aspect-square relative">
         {character.avatar_url ? (
           <img
             src={character.avatar_url}
@@ -96,7 +99,7 @@ export function CharacterCard({
               gradient
             )}
           >
-            <span className="font-display text-5xl font-semibold text-white/90">
+            <span className="font-display text-3xl font-semibold text-white/90">
               {initials}
             </span>
           </div>
@@ -177,12 +180,20 @@ export function CharacterCard({
       </div>
 
       {/* Content */}
-      <CardContent className="p-4">
-        <h3 className="character-name line-clamp-1 mb-1">{character.display_name}</h3>
+      <CardContent className="p-3">
+        <h3 className="font-medium text-sm line-clamp-1 mb-1">{character.display_name}</h3>
+
+        {/* Scene info */}
+        {sceneName && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+            <BookOpen className="h-3 w-3 shrink-0" />
+            <span className="truncate">{sceneName}</span>
+          </div>
+        )}
 
         {/* Assignment info */}
         {assignedMember && (
-          <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
             {assignedMember.role === "gm" ? (
               <Crown className="h-3 w-3" />
             ) : (
@@ -195,13 +206,6 @@ export function CharacterCard({
             </span>
           </div>
         )}
-
-        {/* Description */}
-        {character.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {character.description}
-          </p>
-        )}
       </CardContent>
     </Card>
   )
@@ -211,6 +215,7 @@ interface CharacterCardsGridProps {
   characters: Character[]
   isGM: boolean
   members: CampaignMember[]
+  scenes?: Scene[]
   onEdit: (character: Character) => void
   onArchive: (character: Character) => void
   onAssign: (character: Character) => void
@@ -222,16 +227,27 @@ export function CharacterCardsGrid({
   characters,
   isGM,
   members,
+  scenes = [],
   onEdit,
   onArchive,
   onAssign,
   onUnassign,
   className,
 }: CharacterCardsGridProps) {
+  // Build character-to-scene mapping
+  const characterSceneMap = new Map<string, string>()
+  scenes.forEach((scene) => {
+    if (!scene.is_archived) {
+      scene.character_ids.forEach((charId) => {
+        characterSceneMap.set(charId, scene.title)
+      })
+    }
+  })
+
   return (
     <div
       className={cn(
-        "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6",
+        "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3",
         className
       )}
     >
@@ -241,6 +257,7 @@ export function CharacterCardsGrid({
           character={character}
           isGM={isGM}
           members={members}
+          sceneName={characterSceneMap.get(character.id)}
           onEdit={() => onEdit(character)}
           onArchive={() => onArchive(character)}
           onAssign={() => onAssign(character)}

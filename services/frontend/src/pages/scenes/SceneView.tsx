@@ -29,6 +29,7 @@ import {
 import { Loader2 } from 'lucide-react'
 import { useCampaignStore } from '@/stores/campaignStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useRollStore } from '@/stores/rollStore'
 import { useToast } from '@/hooks/use-toast'
 import type { PassState, CampaignPhase, CampaignSettings, Post } from '@/types'
 
@@ -60,6 +61,8 @@ export default function SceneView() {
     archiveScene,
     addCharacterToScene,
   } = useCampaignStore()
+
+  const { rolls, getRollsInScene } = useRollStore()
 
   const [isScrolled, setIsScrolled] = useState(false)
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
@@ -144,7 +147,10 @@ export default function SceneView() {
           fetchCharacters(campaignId),
         ])
         await fetchScenePassStates(campaignId, sceneId)
-        await fetchPosts(campaignId, sceneId)
+        await Promise.all([
+          fetchPosts(campaignId, sceneId),
+          getRollsInScene(sceneId),
+        ])
       } catch (error) {
         toast({
           variant: 'destructive',
@@ -163,6 +169,7 @@ export default function SceneView() {
     fetchCharacters,
     fetchPosts,
     fetchScenePassStates,
+    getRollsInScene,
     toast,
   ])
 
@@ -268,6 +275,12 @@ export default function SceneView() {
   const handlePostCreated = () => {
     if (campaignId && sceneId) {
       fetchPosts(campaignId, sceneId)
+    }
+  }
+
+  const handleRollUpdated = () => {
+    if (sceneId) {
+      getRollsInScene(sceneId)
     }
   }
 
@@ -381,10 +394,12 @@ export default function SceneView() {
         <PostStream
           posts={posts}
           settings={settings}
+          rolls={rolls}
           isGM={isGM}
           currentUserId={user?.id}
           isLoading={loadingPosts}
           onEditPost={handleEditPost}
+          onRollUpdated={handleRollUpdated}
         />
 
         {/* Spacer for fixed composer */}
@@ -394,7 +409,6 @@ export default function SceneView() {
       {/* Party bubbles - NPCs left, PCs right */}
       <PartyBubbles
         characters={partyBubbleCharacters}
-        phase={phase}
         isGM={isGM}
         selectedCharacterId={effectiveSelectedCharacterId}
         onSelectCharacter={setSelectedCharacterId}

@@ -168,13 +168,13 @@ export function CharacterAssignmentWidget({
             variant="ghost"
             size="icon"
             className={cn(
-              'h-8 w-8 rounded-full bg-panel backdrop-blur-sm border border-border/50',
+              'h-10 w-10 rounded-full bg-background/40 backdrop-blur-md border border-border/30',
               className
             )}
             onClick={(e) => e.stopPropagation()}
             aria-label="Manage scene characters"
           >
-            <Users className="h-4 w-4" />
+            <Users className="h-5 w-5" />
           </Button>
         </DialogTrigger>
       )}
