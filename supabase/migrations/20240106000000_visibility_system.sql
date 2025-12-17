@@ -48,9 +48,9 @@ ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT false;
 -- SCENE VISIBILITY QUERIES SUPPORT
 -- ============================================
 
--- Index to optimize visible scenes queries
-CREATE INDEX IF NOT EXISTS idx_posts_scene_witnesses
-ON posts USING GIN (scene_id, witnesses);
+-- Index to optimize witness array queries (GIN only works on single array column)
+CREATE INDEX IF NOT EXISTS idx_posts_witnesses
+ON posts USING GIN (witnesses);
 
 -- ============================================
 -- PARTIAL INDEX FOR HIDDEN POSTS (GM QUERIES)

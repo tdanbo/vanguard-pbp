@@ -14,11 +14,12 @@ import (
 
 // Post errors.
 var (
-	ErrPostNotFound      = errors.New("post not found")
-	ErrPostLocked        = errors.New("post is locked and cannot be edited")
-	ErrNotPostOwner      = errors.New("you do not own this post")
-	ErrCannotEditAsGM    = errors.New("GMs cannot edit player posts")
-	ErrNotInCorrectPhase = errors.New("action not allowed in current phase")
+	ErrPostNotFound       = errors.New("post not found")
+	ErrPostLocked         = errors.New("post is locked and cannot be edited")
+	ErrNotPostOwner       = errors.New("you do not own this post")
+	ErrCannotEditAsGM     = errors.New("GMs cannot edit player posts")
+	ErrNotInCorrectPhase  = errors.New("action not allowed in current phase")
+	ErrNotMostRecentPost  = errors.New("can only edit the most recent post")
 )
 
 // PostService handles post business logic.
@@ -389,6 +390,14 @@ func (s *PostService) UpdatePost(
 		return nil, ErrNotPostOwner
 	}
 
+	// Non-GM users can only edit the most recent post in the scene
+	if !isGM && isOwner {
+		lastPost, lastErr := s.queries.GetLastScenePost(ctx, post.SceneID)
+		if lastErr == nil && lastPost.ID != postUUID {
+			return nil, ErrNotMostRecentPost
+		}
+	}
+
 	// Build update params
 	updateParams := generated.UpdatePostParams{
 		ID:         postUUID,
@@ -433,7 +442,7 @@ func (s *PostService) UpdatePost(
 	return s.postToResponse(&updatedPost), nil
 }
 
-// DeletePost deletes a post (GM only, unlocks previous post).
+// DeletePost deletes a post (GM or owner of unlocked most-recent post).
 func (s *PostService) DeletePost(
 	ctx context.Context,
 	userID pgtype.UUID,
@@ -456,7 +465,7 @@ func (s *PostService) DeletePost(
 		return err
 	}
 
-	// Only GM can delete posts
+	// Check GM status
 	isGM, err := s.queries.IsUserGM(ctx, generated.IsUserGMParams{
 		CampaignID: scene.CampaignID,
 		UserID:     userID,
@@ -464,8 +473,26 @@ func (s *PostService) DeletePost(
 	if err != nil {
 		return err
 	}
+
+	// Check ownership
+	isOwner := post.UserID == userID
+
+	// Authorization: GM can delete any post, owner can delete their own unlocked most-recent post
 	if !isGM {
-		return ErrNotGM
+		if !isOwner {
+			return ErrNotPostOwner
+		}
+
+		// Owner can only delete unlocked posts
+		if post.IsLocked {
+			return ErrPostLocked
+		}
+
+		// Owner can only delete the most recent post in the scene
+		lastPost, lastErr := s.queries.GetLastScenePost(ctx, post.SceneID)
+		if lastErr == nil && lastPost.ID != postUUID {
+			return ErrNotMostRecentPost
+		}
 	}
 
 	// Start transaction

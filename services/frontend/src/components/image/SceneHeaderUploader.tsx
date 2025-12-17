@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { apiUpload, apiDelete, APIError } from '@/lib/api'
-import { Loader2, Upload, Trash2, ImageIcon } from 'lucide-react'
+import { Loader2, Upload, Trash2, ImageIcon, Check, X } from 'lucide-react'
 
 interface SceneHeaderUploaderProps {
   campaignId: string
@@ -25,10 +25,14 @@ export function SceneHeaderUploader({
   const { toast } = useToast()
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [preview, setPreview] = useState<string | null>(currentUrl)
+  const [savedUrl, setSavedUrl] = useState<string | null>(currentUrl)
+  // Pending file state - file selected but not yet uploaded
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Synchronous file selection - just validate and store locally
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -55,14 +59,45 @@ export function SceneHeaderUploader({
       return
     }
 
+    // Clear previous pending preview
+    if (pendingPreview) {
+      URL.revokeObjectURL(pendingPreview)
+    }
+
+    // Store file and create preview
+    setPendingFile(file)
+    setPendingPreview(URL.createObjectURL(file))
+  }
+
+  // Cancel pending upload
+  const handleCancel = () => {
+    if (pendingPreview) {
+      URL.revokeObjectURL(pendingPreview)
+    }
+    setPendingFile(null)
+    setPendingPreview(null)
+  }
+
+  // Confirm and upload the pending file
+  const handleConfirmUpload = async () => {
+    if (!pendingFile) return
+
     setUploading(true)
     try {
       const result = await apiUpload<{ url: string }>(
         `/api/v1/campaigns/${campaignId}/scenes/${sceneId}/header`,
-        file
+        pendingFile
       )
 
-      setPreview(result.url)
+      // Clear pending state
+      if (pendingPreview) {
+        URL.revokeObjectURL(pendingPreview)
+      }
+      setPendingFile(null)
+      setPendingPreview(null)
+
+      // Update saved URL
+      setSavedUrl(result.url)
       onUploadComplete?.(result.url)
       toast({ title: 'Scene header uploaded' })
     } catch (error) {
@@ -93,12 +128,12 @@ export function SceneHeaderUploader({
   }
 
   const handleDelete = async () => {
-    if (!preview) return
+    if (!savedUrl) return
 
     setDeleting(true)
     try {
       await apiDelete(`/api/v1/campaigns/${campaignId}/scenes/${sceneId}/header`)
-      setPreview(null)
+      setSavedUrl(null)
       onDeleteComplete?.()
       toast({ title: 'Scene header removed' })
     } catch (error) {
@@ -112,15 +147,26 @@ export function SceneHeaderUploader({
     }
   }
 
+  // Show pending preview if available, otherwise show saved URL
+  const displayUrl = pendingPreview || savedUrl
+  const hasPendingFile = pendingFile !== null
+
   return (
     <div className="space-y-4">
-      {preview ? (
+      {displayUrl ? (
         <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
           <img
-            src={preview}
+            src={displayUrl}
             alt="Scene header"
             className="h-full w-full object-cover"
           />
+          {hasPendingFile && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+              <span className="rounded bg-background/90 px-2 py-1 text-sm font-medium">
+                Preview - Click Confirm to upload
+              </span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed bg-muted/50">
@@ -137,48 +183,75 @@ export function SceneHeaderUploader({
         accept="image/png,image/jpeg,image/webp"
         onChange={handleFileSelect}
         disabled={uploading || deleting}
-        className="sr-only"
+        className="hidden"
       />
 
       <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading || deleting}
-        >
-          {uploading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Uploading...
-            </>
-          ) : (
-            <>
+        {hasPendingFile ? (
+          // Show confirm/cancel buttons when there's a pending file
+          <>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleConfirmUpload}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Confirm Upload
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancel}
+              disabled={uploading}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Cancel
+            </Button>
+          </>
+        ) : (
+          // Show upload/change/remove buttons when no pending file
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || deleting}
+            >
               <Upload className="mr-2 h-4 w-4" />
-              {preview ? 'Change Header' : 'Upload Header'}
-            </>
-          )}
-        </Button>
+              {savedUrl ? 'Change Header' : 'Upload Header'}
+            </Button>
 
-        {preview && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDelete}
-            disabled={uploading || deleting}
-          >
-            {deleting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Removing...
-              </>
-            ) : (
-              <>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Remove
-              </>
+            {savedUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDelete}
+                disabled={uploading || deleting}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Remove
+                  </>
+                )}
+              </Button>
             )}
-          </Button>
+          </>
         )}
       </div>
 

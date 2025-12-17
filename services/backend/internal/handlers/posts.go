@@ -363,6 +363,12 @@ func handlePostError(c *gin.Context, err error) {
 			http.StatusForbidden,
 			models.NewAPIError("NOT_POST_OWNER", "You do not own this post"),
 		)
+	case errors.Is(err, service.ErrNotMostRecentPost):
+		models.RespondError(
+			c,
+			http.StatusForbidden,
+			models.NewAPIError("NOT_MOST_RECENT", "Can only edit the most recent post"),
+		)
 	case errors.Is(err, service.ErrSceneNotFound):
 		models.NotFoundError(c, "Scene")
 	case errors.Is(err, service.ErrCharacterNotOwned):

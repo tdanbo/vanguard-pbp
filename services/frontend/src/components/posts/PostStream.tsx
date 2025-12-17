@@ -9,6 +9,7 @@ interface PostStreamProps {
   isGM?: boolean
   currentUserId?: string
   isLoading?: boolean
+  onEditPost?: (post: Post) => void
 }
 
 export function PostStream({
@@ -17,10 +18,13 @@ export function PostStream({
   isGM = false,
   currentUserId,
   isLoading = false,
+  onEditPost,
 }: PostStreamProps) {
+  // Calculate the last post ID for edit icon logic
+  const lastPostId = posts.length > 0 ? posts[posts.length - 1].id : null
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
           <PostStreamSkeleton key={i} />
         ))}
@@ -30,8 +34,8 @@ export function PostStream({
 
   if (posts.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-panel backdrop-blur-md rounded-lg border border-border/50 p-8">
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="bg-card rounded-sm p-8">
           <EmptyPosts variant="compact" />
         </div>
       </div>
@@ -39,7 +43,7 @@ export function PostStream({
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
+    <div className="max-w-5xl mx-auto px-4 py-6 space-y-2">
       {posts.map((post) => (
         <ImmersivePostCard
           key={post.id}
@@ -47,6 +51,8 @@ export function PostStream({
           settings={settings}
           isGM={isGM}
           currentUserId={currentUserId}
+          isLastPost={post.id === lastPostId}
+          onEdit={onEditPost}
         />
       ))}
     </div>
@@ -55,10 +61,10 @@ export function PostStream({
 
 function PostStreamSkeleton() {
   return (
-    <div className="bg-panel backdrop-blur-md rounded-lg border border-border/50 overflow-hidden">
-      <div className="grid grid-cols-[80px_1fr] md:grid-cols-[120px_1fr]">
-        {/* Portrait skeleton */}
-        <Skeleton className="min-h-[120px]" />
+    <div className="bg-card rounded-sm overflow-hidden">
+      <div className="grid grid-cols-[100px_1fr] md:grid-cols-[128px_1fr]">
+        {/* Portrait skeleton - square */}
+        <Skeleton className="aspect-square" />
 
         {/* Content skeleton */}
         <div className="p-4 space-y-3">
@@ -66,7 +72,7 @@ function PostStreamSkeleton() {
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-3/4" />
-          <div className="flex justify-end pt-3 border-t border-border/30">
+          <div className="flex justify-end pt-3 border-t border-border/20">
             <Skeleton className="h-3 w-16" />
           </div>
         </div>

@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { MessageSquare, Archive, Users } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { CharacterAssignmentWidget } from "@/components/scene/CharacterAssignmentWidget"
+import type { CampaignPhase } from "@/types"
 
 interface SceneCardProps {
   scene: {
@@ -18,6 +20,8 @@ interface SceneCardProps {
   campaignId: string
   hasUnread?: boolean
   className?: string
+  isGM?: boolean
+  phase?: CampaignPhase | 'paused'
 }
 
 /**
@@ -34,6 +38,8 @@ export function SceneCard({
   campaignId,
   hasUnread = false,
   className,
+  isGM = false,
+  phase,
 }: SceneCardProps) {
   const navigate = useNavigate()
   const isArchived = scene.is_archived
@@ -69,6 +75,13 @@ export function SceneCard({
 
         {/* Badges container */}
         <div className="absolute top-3 right-3 flex gap-2">
+          {isGM && phase === 'gm_phase' && (
+            <CharacterAssignmentWidget
+              campaignId={campaignId}
+              sceneId={scene.id}
+              sceneCharacterIds={scene.character_ids}
+            />
+          )}
           {hasUnread && <NewBadge />}
           {isArchived && (
             <Badge variant="secondary" className="gap-1">
@@ -185,12 +198,16 @@ interface SceneCardsGridProps {
   scenes: SceneCardProps["scene"][]
   campaignId: string
   className?: string
+  isGM?: boolean
+  phase?: CampaignPhase | 'paused'
 }
 
 export function SceneCardsGrid({
   scenes,
   campaignId,
   className,
+  isGM,
+  phase,
 }: SceneCardsGridProps) {
   return (
     <div
@@ -200,7 +217,13 @@ export function SceneCardsGrid({
       )}
     >
       {scenes.map((scene) => (
-        <SceneCard key={scene.id} scene={scene} campaignId={campaignId} />
+        <SceneCard
+          key={scene.id}
+          scene={scene}
+          campaignId={campaignId}
+          isGM={isGM}
+          phase={phase}
+        />
       ))}
     </div>
   )

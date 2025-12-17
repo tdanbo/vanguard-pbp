@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useCampaignStore } from '@/stores/campaignStore'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import {
   Dialog,
@@ -14,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -26,23 +21,26 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
-import { PlusCircle, Archive, ArchiveRestore, User, UserX, Crown, Pencil } from 'lucide-react'
+import { PlusCircle, User, Users, Eye, EyeOff } from 'lucide-react'
 import { AvatarUploader } from '@/components/image/AvatarUploader'
-import type { Character, CampaignMember, CreateCharacterRequest, CharacterType } from '@/types'
+import { CreateCharacterDialog } from '@/components/character/CreateCharacterDialog'
+import { CharacterCardsGrid } from '@/components/character/CharacterCard'
+import { EmptyState } from '@/components/ui/empty-state'
+import type { Character, CampaignMember, CharacterType, Scene } from '@/types'
 
 interface CharacterManagerProps {
   campaignId: string
   isGM: boolean
   members: CampaignMember[]
+  scenes?: Scene[]
   characterTypeFilter?: 'pc' | 'npc'
 }
 
-export function CharacterManager({ campaignId, isGM, members, characterTypeFilter }: CharacterManagerProps) {
+export function CharacterManager({ campaignId, isGM, members, scenes = [], characterTypeFilter }: CharacterManagerProps) {
   const { toast } = useToast()
   const {
     characters,
     fetchCharacters,
-    createCharacter,
     updateCharacter,
     archiveCharacter,
     unarchiveCharacter,
@@ -56,7 +54,7 @@ export function CharacterManager({ campaignId, isGM, members, characterTypeFilte
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null)
 
-  // Form state
+  // Form state for edit/assign dialogs
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [characterType, setCharacterType] = useState<CharacterType>('pc')
@@ -82,29 +80,6 @@ export function CharacterManager({ campaignId, isGM, members, characterTypeFilte
     setDescription('')
     setCharacterType(characterTypeFilter || 'pc')
     setAssignToUser('')
-  }
-
-  const handleCreate = async () => {
-    if (!displayName.trim()) return
-
-    try {
-      const data: CreateCharacterRequest = {
-        displayName: displayName.trim(),
-        description: description.trim(),
-        characterType,
-        assignToUser: assignToUser && assignToUser !== 'unassigned' ? assignToUser : undefined,
-      }
-      await createCharacter(campaignId, data)
-      toast({ title: 'Character created' })
-      setCreateDialogOpen(false)
-      resetForm()
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to create character',
-        description: (error as Error).message,
-      })
-    }
   }
 
   const handleUpdate = async () => {
@@ -200,127 +175,71 @@ export function CharacterManager({ campaignId, isGM, members, characterTypeFilte
   const singularLabel = characterTypeFilter === 'pc' ? 'PC' : characterTypeFilter === 'npc' ? 'NPC' : 'character'
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>{typeLabel}</CardTitle>
-          <CardDescription>{filteredCount} {filteredCount === 1 ? singularLabel : typeLabel.toLowerCase()} in campaign</CardDescription>
+    <>
+      {/* Header with controls - matches Scenes tab pattern */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-muted-foreground">
+            {filteredCount} {filteredCount === 1 ? singularLabel : typeLabel.toLowerCase()}
+          </p>
+          {isGM && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowArchived(!showArchived)}
+              className="text-muted-foreground"
+            >
+              {showArchived ? (
+                <>
+                  <EyeOff className="mr-2 h-4 w-4" />
+                  Hide archived
+                </>
+              ) : (
+                <>
+                  <Eye className="mr-2 h-4 w-4" />
+                  Show archived
+                </>
+              )}
+            </Button>
+          )}
         </div>
         {isGM && (
-          <Dialog open={createDialogOpen} onOpenChange={(open) => {
-            setCreateDialogOpen(open)
-            if (open) {
-              // Reset form with correct character type when opening
-              setCharacterType(characterTypeFilter || 'pc')
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Create {characterTypeFilter === 'npc' ? 'NPC' : characterTypeFilter === 'pc' ? 'PC' : 'Character'}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create {characterTypeFilter === 'npc' ? 'NPC' : characterTypeFilter === 'pc' ? 'PC' : 'Character'}</DialogTitle>
-                <DialogDescription>Add a new {characterTypeFilter === 'npc' ? 'NPC' : characterTypeFilter === 'pc' ? 'PC' : 'character'} to the campaign.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="displayName">Name</Label>
-                  <Input
-                    id="displayName"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Character name"
-                    maxLength={100}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Character description (optional)"
-                    maxLength={1000}
-                    rows={3}
-                  />
-                </div>
-                {!characterTypeFilter && (
-                  <div className="space-y-2">
-                    <Label htmlFor="characterType">Type</Label>
-                    <Select value={characterType} onValueChange={(v) => setCharacterType(v as CharacterType)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pc">PC (Player Character)</SelectItem>
-                        <SelectItem value="npc">NPC (Non-Player Character)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                {playerMembers.length > 0 && (
-                  <div className="space-y-2">
-                    <Label htmlFor="assignTo">Assign to Player (optional)</Label>
-                    <Select value={assignToUser} onValueChange={setAssignToUser}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a player" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {playerMembers.map((member) => (
-                          <SelectItem key={member.user_id} value={member.user_id}>
-                            Player {member.user_id.slice(0, 8)}...
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleCreate} disabled={!displayName.trim()}>
-                  Create Character
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <>
+            <Button onClick={() => setCreateDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create {characterTypeFilter === 'npc' ? 'NPC' : characterTypeFilter === 'pc' ? 'PC' : 'Character'}
+            </Button>
+            <CreateCharacterDialog
+              open={createDialogOpen}
+              onOpenChange={setCreateDialogOpen}
+              campaignId={campaignId}
+              forceCharacterType={characterTypeFilter}
+              showAssignmentOptions
+              scenes={scenes}
+              members={members}
+            />
+          </>
         )}
-      </CardHeader>
-      <CardContent>
-        {isGM && (
-          <div className="mb-4 flex items-center space-x-2">
-            <Switch id="showArchived" checked={showArchived} onCheckedChange={setShowArchived} />
-            <Label htmlFor="showArchived">Show archived characters</Label>
-          </div>
-        )}
+      </div>
 
-        {visibleCharacters.length === 0 ? (
-          <p className="py-4 text-center text-muted-foreground">
-            No {typeLabel.toLowerCase()} yet. {isGM ? `Create one to get started.` : `The GM hasn't created any ${typeLabel.toLowerCase()} yet.`}
-          </p>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {visibleCharacters.map((character) => (
-              <CharacterCard
-                key={character.id}
-                character={character}
-                isGM={isGM}
-                members={members}
-                onEdit={() => openEditDialog(character)}
-                onArchive={() => handleArchive(character)}
-                onAssign={() => openAssignDialog(character)}
-                onUnassign={() => handleUnassign(character)}
-              />
-            ))}
-          </div>
-        )}
-      </CardContent>
+      {/* Character grid or empty state */}
+      {visibleCharacters.length === 0 ? (
+        <EmptyState
+          icon={characterTypeFilter === 'pc' ? User : Users}
+          title={`No ${typeLabel.toLowerCase()} yet`}
+          description={isGM ? `Create your first ${singularLabel} to get started.` : `The GM hasn't created any ${typeLabel.toLowerCase()} yet.`}
+        />
+      ) : (
+        <CharacterCardsGrid
+          characters={visibleCharacters}
+          isGM={isGM}
+          members={members}
+          onEdit={openEditDialog}
+          onArchive={handleArchive}
+          onAssign={openAssignDialog}
+          onUnassign={handleUnassign}
+        />
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
@@ -433,101 +352,7 @@ export function CharacterManager({ campaignId, isGM, members, characterTypeFilte
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
-  )
-}
-
-interface CharacterCardProps {
-  character: Character
-  isGM: boolean
-  members: CampaignMember[]
-  onEdit: () => void
-  onArchive: () => void
-  onAssign: () => void
-  onUnassign: () => void
-}
-
-function CharacterCard({ character, isGM, members, onEdit, onArchive, onAssign, onUnassign }: CharacterCardProps) {
-  const assignedMember = members.find((m) => m.user_id === character.assigned_user_id)
-  const isOrphaned = !character.assigned_user_id && character.character_type === 'pc'
-
-  return (
-    <div
-      className={`rounded-lg border p-4 ${character.is_archived ? 'opacity-60' : ''}`}
-    >
-      <div className="flex items-start gap-3">
-        <Avatar className="h-12 w-12">
-          <AvatarImage src={character.avatar_url || undefined} alt={character.display_name} />
-          <AvatarFallback>{character.display_name.charAt(0).toUpperCase()}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold truncate">{character.display_name}</h3>
-            <Badge variant={character.character_type === 'pc' ? 'default' : 'secondary'} className="text-xs">
-              {character.character_type.toUpperCase()}
-            </Badge>
-            {character.is_archived && (
-              <Badge variant="outline" className="text-xs">
-                Archived
-              </Badge>
-            )}
-            {isOrphaned && (
-              <Badge variant="destructive" className="text-xs">
-                Orphaned
-              </Badge>
-            )}
-          </div>
-          {character.description && (
-            <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{character.description}</p>
-          )}
-          {assignedMember && (
-            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-              {assignedMember.role === 'gm' ? (
-                <Crown className="h-3 w-3" />
-              ) : (
-                <User className="h-3 w-3" />
-              )}
-              <span>
-                Assigned to {assignedMember.role === 'gm' ? 'GM' : `Player ${assignedMember.user_id.slice(0, 8)}...`}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {isGM && (
-        <div className="mt-4 flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={onEdit}>
-            <Pencil className="mr-1 h-3 w-3" />
-            Edit
-          </Button>
-          {character.assigned_user_id ? (
-            <Button variant="outline" size="sm" onClick={onUnassign}>
-              <UserX className="mr-1 h-3 w-3" />
-              Unassign
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" onClick={onAssign}>
-              <User className="mr-1 h-3 w-3" />
-              Assign
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onArchive}>
-            {character.is_archived ? (
-              <>
-                <ArchiveRestore className="mr-1 h-3 w-3" />
-                Restore
-              </>
-            ) : (
-              <>
-                <Archive className="mr-1 h-3 w-3" />
-                Archive
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-    </div>
+    </>
   )
 }
 

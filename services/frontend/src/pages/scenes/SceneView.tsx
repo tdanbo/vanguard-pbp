@@ -3,10 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ImmersiveLayout } from '@/components/layout/ImmersiveLayout'
 import { SceneHeader, SceneHeaderCompact } from '@/components/scene/SceneHeader'
 import { SceneMenu } from '@/components/scene/SceneMenu'
+import { CharacterAssignmentWidget } from '@/components/scene/CharacterAssignmentWidget'
 import { SceneRoster, type SceneRosterCharacter } from '@/components/scene/SceneRoster'
+import { PartyBubbles, type PartyBubbleCharacter } from '@/components/scene/PartyBubbles'
+import { CreateCharacterDialog } from '@/components/character/CreateCharacterDialog'
 import { PostStream } from '@/components/posts/PostStream'
 import { ImmersiveComposer } from '@/components/posts/ImmersiveComposer'
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import {
   Dialog,
   DialogContent,
@@ -23,11 +26,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Users, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useCampaignStore } from '@/stores/campaignStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useToast } from '@/hooks/use-toast'
-import type { PassState, CampaignPhase, CampaignSettings } from '@/types'
+import type { PassState, CampaignPhase, CampaignSettings, Post } from '@/types'
 
 export default function SceneView() {
   const { id: campaignId, sceneId } = useParams<{
@@ -65,6 +68,12 @@ export default function SceneView() {
   const [showRosterSheet, setShowRosterSheet] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
   const [addCharacterSelectedId, setAddCharacterSelectedId] = useState('')
+  const [createNPCDialogOpen, setCreateNPCDialogOpen] = useState(false)
+  const [editingPost, setEditingPost] = useState<Post | null>(null)
+
+  // Character assignment widget state (for party bubble add buttons)
+  const [assignmentWidgetOpen, setAssignmentWidgetOpen] = useState(false)
+  const [assignmentWidgetFilter, setAssignmentWidgetFilter] = useState<'pc' | 'npc'>('npc')
 
   // Current scene
   const scene = useMemo(
@@ -166,13 +175,27 @@ export default function SceneView() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Map characters to roster format
+  // Map characters to roster format (for sheet roster)
   const rosterCharacters: SceneRosterCharacter[] = useMemo(
     () =>
       sceneCharacters.map((c) => ({
         id: c.id,
         displayName: c.display_name,
         avatarUrl: c.avatar_url,
+        passState: (scenePassStates[c.id] || scene?.pass_states?.[c.id] || 'none') as PassState,
+        isOwnedByUser: c.assigned_user_id === user?.id,
+      })),
+    [sceneCharacters, scenePassStates, scene, user]
+  )
+
+  // Map characters for party bubbles (includes characterType)
+  const partyBubbleCharacters: PartyBubbleCharacter[] = useMemo(
+    () =>
+      sceneCharacters.map((c) => ({
+        id: c.id,
+        displayName: c.display_name,
+        avatarUrl: c.avatar_url,
+        characterType: c.character_type,
         passState: (scenePassStates[c.id] || scene?.pass_states?.[c.id] || 'none') as PassState,
         isOwnedByUser: c.assigned_user_id === user?.id,
       })),
@@ -248,6 +271,63 @@ export default function SceneView() {
     }
   }
 
+  // Edit post handlers
+  const handleEditPost = (post: Post) => {
+    setEditingPost(post)
+    // Set the character selection to match the post's character
+    if (post.characterId) {
+      setSelectedCharacterId(post.characterId)
+    } else {
+      // Narrator post
+      setSelectedCharacterId('narrator')
+    }
+  }
+
+  const handleEditComplete = () => {
+    setEditingPost(null)
+    if (campaignId && sceneId) {
+      fetchPosts(campaignId, sceneId)
+    }
+  }
+
+  const handleEditCancel = () => {
+    setEditingPost(null)
+  }
+
+  const handlePostDeleted = () => {
+    setEditingPost(null)
+    if (campaignId && sceneId) {
+      fetchPosts(campaignId, sceneId)
+    }
+  }
+
+  // Handle bubble click to pass (for players)
+  const handleBubblePass = async (characterId: string) => {
+    if (!campaignId || !sceneId) return
+    try {
+      await setPass(campaignId, sceneId, characterId, 'passed')
+      toast({ title: 'Turn passed' })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to pass',
+        description: (error as Error).message,
+      })
+    }
+  }
+
+  // Handler for NPC add button (opens assignment widget filtered to NPCs)
+  const handleAddNPC = () => {
+    setAssignmentWidgetFilter('npc')
+    setAssignmentWidgetOpen(true)
+  }
+
+  // Handler for PC add button (opens assignment widget filtered to PCs)
+  const handleAddPC = () => {
+    setAssignmentWidgetFilter('pc')
+    setAssignmentWidgetOpen(true)
+  }
+
   // Loading state
   if (loadingCampaign || loadingScenes || !scene) {
     return (
@@ -262,45 +342,29 @@ export default function SceneView() {
     ? 'paused'
     : currentCampaign?.current_phase || 'gm_phase'
 
-  // Character selector for multi-character users or GMs with Narrator option
-  const showCharacterSelector = isGM || userCharacters.length > 1
-  const CharacterSelector = showCharacterSelector ? (
-    <div className="fixed bottom-24 left-4 z-40 lg:hidden">
-      <Select
-        value={effectiveSelectedCharacterId || ''}
-        onValueChange={setSelectedCharacterId}
-      >
-        <SelectTrigger className="w-[160px] bg-panel backdrop-blur-md border-border/50">
-          <SelectValue placeholder="Select character" />
-        </SelectTrigger>
-        <SelectContent>
-          {isGM && (
-            <SelectItem value="narrator">Narrator</SelectItem>
-          )}
-          {userCharacters.map((char) => (
-            <SelectItem key={char.id} value={char.id}>
-              {char.display_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  ) : null
-
   return (
     <ImmersiveLayout
       backgroundImage={scene.header_image_url}
       onBack={() => navigate(`/campaigns/${campaignId}`)}
       backLabel="Back to campaign"
       menuContent={
-        <SceneMenu
-          isGM={isGM}
-          onViewRoster={() => setShowRosterSheet(true)}
-          onSettings={() =>
-            navigate(`/campaigns/${campaignId}/scenes/${sceneId}/settings`)
-          }
-          onArchive={handleArchive}
-        />
+        <div className="flex items-center gap-2">
+          {isGM && currentCampaign?.current_phase === 'gm_phase' && !currentCampaign.is_paused && (
+            <CharacterAssignmentWidget
+              campaignId={campaignId!}
+              sceneId={sceneId!}
+              sceneCharacterIds={scene?.character_ids || []}
+            />
+          )}
+          <SceneMenu
+            isGM={isGM}
+            onViewRoster={() => setShowRosterSheet(true)}
+            onSettings={() =>
+              navigate(`/campaigns/${campaignId}/scenes/${sceneId}/settings`)
+            }
+            onArchive={handleArchive}
+          />
+        </div>
       }
     >
       {/* Compact header when scrolled */}
@@ -310,87 +374,74 @@ export default function SceneView() {
         </div>
       )}
 
-      {/* Main content with sidebar on desktop */}
-      <div className="lg:pr-72">
-        {/* Main column - centered with sidebar offset on desktop */}
-        <div>
-          <SceneHeader scene={scene} />
+      {/* Main content */}
+      <div>
+        <SceneHeader scene={scene} />
 
-          <PostStream
-            posts={posts}
-            settings={settings}
-            isGM={isGM}
-            currentUserId={user?.id}
-            isLoading={loadingPosts}
-          />
-
-          {/* Spacer for fixed composer */}
-          <div className="h-32" />
-        </div>
-      </div>
-
-      {/* Desktop sidebar - fixed on right */}
-      <div className="hidden lg:block fixed top-20 right-4 w-64 z-30">
-        <SceneRoster
-          phase={phase}
-          characters={rosterCharacters}
+        <PostStream
+          posts={posts}
+          settings={settings}
           isGM={isGM}
-          onPass={handlePass}
-          onClearPass={handleClearPass}
-          onAddCharacter={() => setAddCharacterDialogOpen(true)}
+          currentUserId={user?.id}
+          isLoading={loadingPosts}
+          onEditPost={handleEditPost}
         />
 
-        {/* Desktop character selector */}
-        {showCharacterSelector && (
-          <div className="mt-4">
-            <Select
-              value={effectiveSelectedCharacterId || ''}
-              onValueChange={setSelectedCharacterId}
-            >
-              <SelectTrigger className="bg-panel backdrop-blur-md border-border/50">
-                <SelectValue placeholder="Select character" />
-              </SelectTrigger>
-              <SelectContent>
-                {isGM && (
-                  <SelectItem value="narrator">Narrator</SelectItem>
-                )}
-                {userCharacters.map((char) => (
-                  <SelectItem key={char.id} value={char.id}>
-                    {char.display_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        {/* Spacer for fixed composer */}
+        <div className="h-32" />
       </div>
 
-      {/* Mobile roster button and sheet */}
-      <div className="lg:hidden">
-        <Sheet open={showRosterSheet} onOpenChange={setShowRosterSheet}>
-          <SheetTrigger asChild>
-            <Button
-              size="icon"
-              className="fixed bottom-24 right-4 z-30 rounded-full bg-panel backdrop-blur-sm border border-border/50"
-            >
-              <Users className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="h-[60vh]">
-            <SceneRoster
-              phase={phase}
-              characters={rosterCharacters}
-              isGM={isGM}
-              onPass={handlePass}
-              onClearPass={handleClearPass}
-              onAddCharacter={() => setAddCharacterDialogOpen(true)}
-            />
-          </SheetContent>
-        </Sheet>
-      </div>
+      {/* Party bubbles - NPCs left, PCs right */}
+      <PartyBubbles
+        characters={partyBubbleCharacters}
+        phase={phase}
+        isGM={isGM}
+        selectedCharacterId={effectiveSelectedCharacterId}
+        onSelectCharacter={setSelectedCharacterId}
+        onPass={handleBubblePass}
+        onAddNPC={isGM ? handleAddNPC : undefined}
+        onAddPC={isGM ? handleAddPC : undefined}
+      />
 
-      {/* Character selector for mobile */}
-      {CharacterSelector}
+      {/* Quick NPC creation dialog (kept for roster sheet) */}
+      {scene && (
+        <CreateCharacterDialog
+          open={createNPCDialogOpen}
+          onOpenChange={setCreateNPCDialogOpen}
+          campaignId={campaignId!}
+          sceneId={sceneId!}
+          sceneName={scene.title}
+          forceCharacterType="npc"
+        />
+      )}
+
+      {/* Character assignment widget (controlled mode for party bubble add buttons) */}
+      {scene && (
+        <CharacterAssignmentWidget
+          campaignId={campaignId!}
+          sceneId={sceneId!}
+          sceneCharacterIds={scene.character_ids || []}
+          open={assignmentWidgetOpen}
+          onOpenChange={setAssignmentWidgetOpen}
+          initialFilter={assignmentWidgetFilter}
+          showFilterToggle={false}
+          hideTrigger={true}
+        />
+      )}
+
+      {/* Full roster sheet (accessed via menu) */}
+      <Sheet open={showRosterSheet} onOpenChange={setShowRosterSheet}>
+        <SheetContent side="bottom" className="h-[60vh]">
+          <SceneRoster
+            phase={phase}
+            characters={rosterCharacters}
+            isGM={isGM}
+            onPass={handlePass}
+            onClearPass={handleClearPass}
+            onAddCharacter={() => setAddCharacterDialogOpen(true)}
+          />
+        </SheetContent>
+      </Sheet>
 
       {/* Composer */}
       <ImmersiveComposer
@@ -400,6 +451,11 @@ export default function SceneView() {
         isNarrator={isNarrator}
         settings={settings}
         onPostCreated={handlePostCreated}
+        editingPost={editingPost}
+        onEditComplete={handleEditComplete}
+        onEditCancel={handleEditCancel}
+        isGM={isGM}
+        onPostDeleted={handlePostDeleted}
       />
 
       {/* Add Character Dialog */}

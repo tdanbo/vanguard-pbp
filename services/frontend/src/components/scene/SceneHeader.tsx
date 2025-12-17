@@ -12,8 +12,8 @@ interface SceneHeaderProps {
 export function SceneHeader({ scene, className }: SceneHeaderProps) {
   return (
     <div className={cn("relative", className)}>
-      {/* Image or gradient background */}
-      <div className="min-h-[40vh] relative">
+      {/* Image or gradient background - shorter height */}
+      <div className="h-48 md:h-56 relative">
         {scene.header_image_url ? (
           <>
             <img
@@ -28,14 +28,14 @@ export function SceneHeader({ scene, className }: SceneHeaderProps) {
           <div className="absolute inset-0 scene-atmosphere" />
         )}
 
-        {/* Title overlay - positioned at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-8">
-          <div className="max-w-4xl mx-auto">
+        {/* Title overlay - centered */}
+        <div className="absolute inset-0 flex items-center justify-center p-4">
+          <div className="text-center">
             <h1 className="scene-title text-white mb-2">
               {scene.title}
             </h1>
             {scene.description && (
-              <p className="text-lg text-white/80 max-w-2xl">
+              <p className="text-base md:text-lg text-gold italic max-w-xl mx-auto">
                 {scene.description}
               </p>
             )}
@@ -54,8 +54,8 @@ interface SceneHeaderCompactProps {
 
 export function SceneHeaderCompact({ scene }: SceneHeaderCompactProps) {
   return (
-    <div className="bg-panel backdrop-blur-md border-b border-border/50 py-3 px-4 lg:pr-72">
-      <div className="max-w-4xl mx-auto">
+    <div className="bg-panel backdrop-blur-md border-b border-border/50 py-3 px-4">
+      <div className="max-w-4xl mx-auto text-center">
         <h1 className="font-display text-xl font-semibold">{scene.title}</h1>
       </div>
     </div>

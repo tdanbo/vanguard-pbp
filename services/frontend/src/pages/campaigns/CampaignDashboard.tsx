@@ -382,7 +382,12 @@ export default function CampaignDashboard() {
                 description={isGM ? "Create your first scene to get started." : "No scenes have been created yet."}
               />
             ) : (
-              <SceneCardsGrid scenes={visibleScenes} campaignId={currentCampaign.id} />
+              <SceneCardsGrid
+                scenes={visibleScenes}
+                campaignId={currentCampaign.id}
+                isGM={isGM}
+                phase={currentCampaign.is_paused ? 'paused' : currentCampaign.current_phase}
+              />
             )}
           </TabsContent>
 
@@ -391,6 +396,7 @@ export default function CampaignDashboard() {
               campaignId={currentCampaign.id}
               isGM={isGM}
               members={members}
+              scenes={scenes}
               characterTypeFilter="pc"
             />
           </TabsContent>
@@ -400,6 +406,7 @@ export default function CampaignDashboard() {
               campaignId={currentCampaign.id}
               isGM={isGM}
               members={members}
+              scenes={scenes}
               characterTypeFilter="npc"
             />
           </TabsContent>

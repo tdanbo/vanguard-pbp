@@ -19,13 +19,24 @@ import {
   EyeOff,
   X,
   Plus,
+  Trash2,
 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useComposeLock } from '@/hooks/useComposeLock'
 import { useDraft } from '@/hooks/useDraft'
 import { useCampaignStore } from '@/stores/campaignStore'
 import { useToast } from '@/hooks/use-toast'
 import { LockTimerBar } from '@/components/realtime'
-import type { Character, CampaignSettings, PostBlock } from '@/types'
+import type { Character, CampaignSettings, PostBlock, Post } from '@/types'
 
 interface ImmersiveComposerProps {
   campaignId: string
@@ -36,6 +47,13 @@ interface ImmersiveComposerProps {
   onPostCreated?: () => void
   isLocked?: boolean
   lockHolder?: string
+  // Edit mode props
+  editingPost?: Post | null
+  onEditComplete?: () => void
+  onEditCancel?: () => void
+  // Delete functionality
+  isGM?: boolean
+  onPostDeleted?: () => void
 }
 
 export function ImmersiveComposer({
@@ -47,14 +65,23 @@ export function ImmersiveComposer({
   onPostCreated,
   isLocked: externalLocked = false,
   lockHolder,
+  editingPost,
+  onEditComplete,
+  onEditCancel,
+  isGM = false,
+  onPostDeleted,
 }: ImmersiveComposerProps) {
   const { toast } = useToast()
-  const { createPost } = useCampaignStore()
+  const { createPost, updatePost, deletePost } = useCampaignStore()
+  const isEditMode = Boolean(editingPost)
 
   const [mode, setMode] = useState<'narrative' | 'ooc'>('narrative')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [narratorComposing, setNarratorComposing] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const textareaRefs = useRef<Map<number, HTMLTextAreaElement>>(new Map())
+  const editInitializedRef = useRef<string | null>(null)
 
   // Derive the effective character ID for hooks (narrator uses 'narrator' as ID)
   const effectiveCharacterId = isNarrator ? 'narrator' : (character?.id || '')
@@ -92,7 +119,7 @@ export function ImmersiveComposer({
 
   const hasLock = isNarrator ? narratorComposing : hasCharacterLock
 
-  // Draft hook
+  // Draft hook - disable autoLoad when editing to prevent overwriting editingPost content
   const {
     blocks,
     oocText,
@@ -106,11 +133,47 @@ export function ImmersiveComposer({
   } = useDraft({
     sceneId,
     characterId: effectiveCharacterId,
-    autoLoad: true,
+    autoLoad: !isEditMode,
   })
 
   // Check if there's any content in blocks
   const hasBlockContent = blocks.some((b) => b.content.trim())
+
+  // Populate fields and acquire lock when entering edit mode
+  // Use ref to prevent re-initialization when unstable setters change
+  useEffect(() => {
+    if (editingPost && editInitializedRef.current !== editingPost.id) {
+      // Mark as initialized for this post
+      editInitializedRef.current = editingPost.id
+
+      setBlocks(editingPost.blocks || [])
+      setOocText(editingPost.oocText || '')
+      setIntention(editingPost.intention || null)
+      setIsHidden(editingPost.isHidden || false)
+
+      // Auto-acquire lock when entering edit mode (only if not already holding a lock)
+      const autoAcquireLock = async () => {
+        if (editingPost.characterId && !lockId) {
+          // Character post - acquire compose lock
+          try {
+            await acquireLock(editingPost.isHidden || false)
+          } catch {
+            // Error is handled by onError callback in useComposeLock
+          }
+        } else if (!editingPost.characterId && !narratorComposing) {
+          // Narrator post - just set composing state
+          setNarratorComposing(true)
+        }
+      }
+      autoAcquireLock()
+    } else if (!editingPost) {
+      // Clear initialization tracking when exiting edit mode
+      editInitializedRef.current = null
+    }
+    // Note: We use editingPost?.id to only re-run when editing a different post
+    // Setters are intentionally excluded as they are unstable (change on every render)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingPost?.id, acquireLock])
 
   // Update hidden status when toggle changes
   useEffect(() => {
@@ -235,12 +298,106 @@ export function ImmersiveComposer({
     }
   }
 
+  const handleUpdate = async () => {
+    if (!editingPost) return
+
+    if (!isNarrator && !lockId) {
+      toast({
+        variant: 'destructive',
+        title: 'No lock',
+        description: 'You must have an active compose lock to save changes.',
+      })
+      return
+    }
+
+    // Validate content
+    const filledBlocks = blocks.filter((b) => b.content.trim())
+    if (filledBlocks.length === 0 && !oocText.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Empty post',
+        description: 'Please add at least one action or dialog block.',
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      await updatePost(editingPost.id, {
+        blocks: filledBlocks,
+        oocText: oocText || undefined,
+        intention: intention || undefined,
+      })
+
+      await handleReleaseLock()
+
+      toast({ title: 'Post updated successfully' })
+      editInitializedRef.current = null
+      onEditComplete?.()
+
+      // Reset state
+      setBlocks([])
+      setOocText('')
+      setMode('narrative')
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to update post',
+        description: (error as Error).message,
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleCancelEdit = async () => {
+    editInitializedRef.current = null
+    await handleReleaseLock()
+    onEditCancel?.()
+    // Reset state
+    setBlocks([])
+    setOocText('')
+    setMode('narrative')
+  }
+
+  const handleDeletePost = async () => {
+    if (!editingPost) return
+
+    setIsDeleting(true)
+
+    try {
+      await deletePost(editingPost.id)
+      await handleReleaseLock()
+
+      toast({ title: 'Post deleted successfully' })
+      setShowDeleteConfirm(false)
+      onPostDeleted?.()
+
+      // Reset state
+      setBlocks([])
+      setOocText('')
+      setMode('narrative')
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to delete post',
+        description: (error as Error).message,
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  // Can delete if: GM (always), or owner of unlocked post
+  const canDelete = isEditMode && (isGM || (editingPost && !editingPost.isLocked))
+
   // If no character is selected and not narrator mode, show minimal UI
   if (!character && !isNarrator) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 p-4 lg:pr-72 z-40">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-panel backdrop-blur-md rounded-2xl border border-border/50 px-4 py-3 text-center">
+      <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-card rounded-sm px-4 py-3 text-center">
             <span className="text-sm text-muted-foreground">
               Select a character to post
             </span>
@@ -253,9 +410,9 @@ export function ImmersiveComposer({
   // Show locked by other player state
   if (externalLocked && !hasLock) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 p-4 lg:pr-72 z-40">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-panel backdrop-blur-md rounded-2xl border border-border/50 px-4 py-3">
+      <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-card rounded-sm px-4 py-3">
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <Lock className="h-4 w-4" />
               <span className="text-sm">
@@ -271,9 +428,9 @@ export function ImmersiveComposer({
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 lg:pr-72 z-40">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-panel backdrop-blur-md rounded-2xl border border-border/50 overflow-hidden">
+    <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
+      <div className="max-w-5xl mx-auto">
+        <div className="bg-card rounded-sm overflow-hidden">
           {/* Lock timer bar (not shown for narrator mode) */}
           {hasLock && !isNarrator && remainingSeconds > 0 && (
             <LockTimerBar
@@ -286,23 +443,35 @@ export function ImmersiveComposer({
             // Not locked - show acquire button
             <div className="p-4 flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
-                Ready to write as {displayName}
+                {isEditMode ? 'Editing post' : `Ready to write as ${displayName}`}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAcquireLock}
-                disabled={lockLoading}
-              >
-                {lockLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Lock className="h-4 w-4 mr-1" />
-                    Take Post
-                  </>
+              <div className="flex items-center gap-2">
+                {isEditMode && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelEdit}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
                 )}
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAcquireLock}
+                  disabled={lockLoading}
+                >
+                  {lockLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4 mr-1" />
+                      {isEditMode ? 'Edit Post' : 'Take Post'}
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           ) : (
             // Has lock - show full composer
@@ -313,7 +482,7 @@ export function ImmersiveComposer({
                   value={mode}
                   onValueChange={(v) => setMode(v as 'narrative' | 'ooc')}
                 >
-                  <TabsList className="bg-secondary/50 h-8">
+                  <TabsList className="bg-secondary/30 h-8">
                     <TabsTrigger value="narrative" className="text-xs h-7">
                       Narrative
                     </TabsTrigger>
@@ -457,15 +626,32 @@ export function ImmersiveComposer({
                   )}
                 </div>
 
-                {/* Release and send */}
+                {/* Release/Cancel/Delete and Submit/Save */}
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={handleReleaseLock}>
-                    <Unlock className="h-4 w-4 mr-1" />
-                    Release
-                  </Button>
+                  {isEditMode ? (
+                    <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                      <X className="h-4 w-4 mr-1" />
+                      Cancel
+                    </Button>
+                  ) : (
+                    <Button variant="ghost" size="sm" onClick={handleReleaseLock}>
+                      <Unlock className="h-4 w-4 mr-1" />
+                      Release
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete
+                    </Button>
+                  )}
                   <Button
                     size="sm"
-                    onClick={handleSubmit}
+                    onClick={isEditMode ? handleUpdate : handleSubmit}
                     disabled={
                       (mode === 'narrative' && !hasBlockContent) ||
                       (mode === 'ooc' && !oocText.trim()) ||
@@ -477,7 +663,7 @@ export function ImmersiveComposer({
                     ) : (
                       <>
                         <Send className="h-4 w-4 mr-1" />
-                        Post
+                        {isEditMode ? 'Save Changes' : 'Post'}
                       </>
                     )}
                   </Button>
@@ -487,6 +673,33 @@ export function ImmersiveComposer({
           )}
         </div>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this post?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The post will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePost}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-1" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

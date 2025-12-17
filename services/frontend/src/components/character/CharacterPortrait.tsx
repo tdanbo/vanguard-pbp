@@ -4,13 +4,29 @@ interface CharacterPortraitProps {
   src?: string | null
   name?: string | null
   size?: "sm" | "md" | "lg"
+  variant?: "portrait" | "square" | "circle"
   className?: string
 }
 
-const sizeClasses = {
+// Portrait sizes (tall, 4:5 aspect ratio)
+const portraitSizeClasses = {
   sm: "w-12 h-15 text-sm",      // 48×60
   md: "w-20 h-[100px] text-lg",  // 80×100
   lg: "w-30 h-[150px] text-2xl", // 120×150
+}
+
+// Square sizes
+const squareSizeClasses = {
+  sm: "w-12 h-12 text-sm",      // 48×48
+  md: "w-20 h-20 text-lg",       // 80×80
+  lg: "w-24 h-24 text-2xl",      // 96×96
+}
+
+// Circle sizes (same as square but with rounded-full)
+const circleSizeClasses = {
+  sm: "w-10 h-10 text-xs",       // 40×40
+  md: "w-12 h-12 text-sm",       // 48×48
+  lg: "w-16 h-16 text-lg",       // 64×64
 }
 
 function getInitials(name: string | null | undefined): string {
@@ -46,16 +62,30 @@ export function CharacterPortrait({
   src,
   name,
   size = "md",
+  variant = "portrait",
   className,
 }: CharacterPortraitProps) {
   const displayName = name || "Narrator"
   const initials = getInitials(name)
   const gradient = getGradient(name)
 
+  // Select size classes based on variant
+  const sizeClasses = variant === "portrait"
+    ? portraitSizeClasses
+    : variant === "square"
+    ? squareSizeClasses
+    : circleSizeClasses
+
+  // Select border radius based on variant
+  const borderRadius = variant === "circle"
+    ? "rounded-full"
+    : "rounded-lg"
+
   return (
     <div
       className={cn(
-        "relative rounded-lg overflow-hidden border-2 border-border flex-shrink-0",
+        "relative overflow-hidden border-2 border-border flex-shrink-0",
+        borderRadius,
         sizeClasses[size],
         className
       )}
