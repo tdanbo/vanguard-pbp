@@ -43,7 +43,8 @@ function formatTimeLeft(expiresAt: string | null, now: number): string {
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
 
-  if (days > 0) return `${days}d ${hours}h`
+  // Always show all units for clarity
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`
   if (hours > 0) return `${hours}h ${minutes}m`
   return `${minutes}m`
 }
@@ -99,7 +100,7 @@ export function PhaseBar({
 
   if (isPaused) {
     return (
-      <div className={cn('bg-panel backdrop-blur-md border-b border-border/30 p-4', className)}>
+      <div className={cn('space-y-2', className)}>
         <div className="flex items-center justify-center gap-2 text-muted-foreground">
           <span className="text-sm uppercase tracking-wider">Campaign Paused</span>
         </div>
@@ -108,10 +109,27 @@ export function PhaseBar({
   }
 
   return (
-    <div className={cn('bg-panel backdrop-blur-md border-b border-border/30', className)}>
+    <div className={cn('space-y-2', className)}>
+      {/* Phase label - above progress bar */}
+      <div className="flex items-center gap-2">
+        {isGMPhase ? (
+          <Crown className="h-4 w-4 text-gm-phase shrink-0" />
+        ) : (
+          <Users className="h-4 w-4 text-pc-phase shrink-0" />
+        )}
+        <span
+          className={cn(
+            'text-sm font-medium uppercase tracking-wider',
+            isGMPhase ? 'text-gm-phase' : 'text-pc-phase'
+          )}
+        >
+          {isGMPhase ? 'GM Phase' : 'PC Phase'}
+        </span>
+      </div>
+
       {/* Timer bar */}
       {hasTimeGate && (
-        <div className="h-1.5 w-full bg-background/30 overflow-hidden">
+        <div className="h-1.5 w-full bg-background/30 overflow-hidden rounded-full">
           <div
             className={cn(
               'h-full transition-all duration-1000 ease-linear',
@@ -126,27 +144,10 @@ export function PhaseBar({
         </div>
       )}
 
-      {/* Phase info row */}
-      <div className="px-4 py-3 flex items-center justify-between gap-4">
-        {/* Left: Phase label */}
-        <div className="flex items-center gap-2 min-w-0">
-          {isGMPhase ? (
-            <Crown className="h-4 w-4 text-gm-phase shrink-0" />
-          ) : (
-            <Users className="h-4 w-4 text-pc-phase shrink-0" />
-          )}
-          <span
-            className={cn(
-              'text-sm font-medium uppercase tracking-wider',
-              isGMPhase ? 'text-gm-phase' : 'text-pc-phase'
-            )}
-          >
-            {isGMPhase ? 'GM Phase' : 'PC Phase'}
-          </span>
-        </div>
-
-        {/* Center: Time gate countdown */}
-        {hasTimeGate && (
+      {/* Info row: countdown + toggle */}
+      <div className="flex items-center justify-between gap-4">
+        {/* Time gate countdown */}
+        {hasTimeGate ? (
           <div
             className={cn(
               'flex items-center gap-1.5 text-xs',
@@ -162,9 +163,11 @@ export function PhaseBar({
               {isExpired ? 'Time gate expired' : `Time to next phase: ${timeLeft}`}
             </span>
           </div>
+        ) : (
+          <div />
         )}
 
-        {/* Right: Phase toggle */}
+        {/* Phase toggle */}
         <div className="flex items-center shrink-0">
           <div
             className={cn(

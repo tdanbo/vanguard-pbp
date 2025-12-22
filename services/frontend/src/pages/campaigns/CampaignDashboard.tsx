@@ -49,9 +49,7 @@ import { CampaignHeader, SceneCardsGrid } from '@/components/campaign'
 import { CharacterManager } from '@/components/character/CharacterManager'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
-  PhaseIndicator,
-  PhaseTransitionButton,
-  TimeGateInfo,
+  PhaseBar,
   CampaignPassOverview,
 } from '@/components/phase'
 
@@ -71,6 +69,7 @@ export default function CampaignDashboard() {
     fetchInvites,
     fetchScenes,
     fetchPhaseStatus,
+    transitionPhase,
     createInvite,
     revokeInvite,
     removeMember,
@@ -232,34 +231,30 @@ export default function CampaignDashboard() {
       )}
 
       {/* Phase Status */}
-      <Card className="mb-6">
-        <CardContent className="py-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <PhaseIndicator
-                phase={currentCampaign.current_phase}
-                isPaused={isPaused}
-                phaseStatus={phaseStatus}
-                size="md"
-                showDetails={currentCampaign.current_phase === 'pc_phase'}
-              />
-              <TimeGateInfo
-                preset={currentCampaign.settings?.timeGatePreset || null}
-                expiresAt={currentCampaign.current_phase_expires_at}
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              {isGM && phaseStatus && (
-                <PhaseTransitionButton
-                  campaignId={currentCampaign.id}
-                  phaseStatus={phaseStatus}
-                  isGM={isGM}
-                />
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <PhaseBar
+        currentPhase={currentCampaign.current_phase}
+        phaseStartedAt={currentCampaign.current_phase_started_at || null}
+        expiresAt={currentCampaign.current_phase_expires_at || null}
+        isGM={isGM}
+        canTransition={phaseStatus?.canTransition ?? false}
+        transitionBlock={phaseStatus?.transitionBlock}
+        isPaused={isPaused}
+        onTransitionPhase={(toPhase) => {
+          transitionPhase(currentCampaign.id, toPhase)
+            .then(() => {
+              toast({ title: `Transitioned to ${toPhase === 'gm_phase' ? 'GM' : 'PC'} Phase` })
+              fetchPhaseStatus(currentCampaign.id)
+            })
+            .catch((error: Error) => {
+              toast({
+                variant: 'destructive',
+                title: 'Failed to transition phase',
+                description: error.message,
+              })
+            })
+        }}
+        className="mb-6"
+      />
 
       {/* Pass Overview (PC Phase only) */}
       {currentCampaign.current_phase === 'pc_phase' && (

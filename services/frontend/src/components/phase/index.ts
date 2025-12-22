@@ -1,3 +1,4 @@
+export { PhaseBar } from './PhaseBar'
 export { PhaseIndicator } from './PhaseIndicator'
 export { PhaseTransitionButton } from './PhaseTransitionButton'
 export { PassButton } from './PassButton'
