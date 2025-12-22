@@ -16,7 +16,7 @@ type CreateCharacterRequest struct {
 	DisplayName   string  `binding:"required,min=1,max=100" json:"displayName"`
 	Description   string  `binding:"max=1000"               json:"description"`
 	CharacterType string  `binding:"required,oneof=pc npc"  json:"characterType"`
-	AssignToUser  *string `json:"assignToUser,omitempty"`
+	AssignToUser  *string `binding:"-"                      json:"assignToUser,omitempty"`
 }
 
 // UpdateCharacterRequest represents the request body for updating a character.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -36,9 +37,9 @@ func NewCampaignService(pool *pgxpool.Pool) *CampaignService {
 
 // CreateCampaignRequest represents the request to create a campaign.
 type CreateCampaignRequest struct {
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	Settings    map[string]interface{} `json:"settings,omitempty"`
+	Title       string         `json:"title"`
+	Description string         `json:"description"`
+	Settings    map[string]any `json:"settings,omitempty"`
 }
 
 // CreateCampaign creates a new campaign and adds the creator as GM.
@@ -63,9 +64,7 @@ func (s *CampaignService) CreateCampaign(
 			return nil, validateErr
 		}
 		// Merge provided settings with defaults
-		for k, v := range req.Settings {
-			settings[k] = v
-		}
+		maps.Copy(settings, req.Settings)
 	}
 
 	settingsJSON, err := json.Marshal(settings)
@@ -147,9 +146,9 @@ func (s *CampaignService) ListUserCampaigns(
 
 // UpdateCampaignRequest represents the request to update a campaign.
 type UpdateCampaignRequest struct {
-	Title       *string                 `json:"title,omitempty"`
-	Description *string                 `json:"description,omitempty"`
-	Settings    *map[string]interface{} `json:"settings,omitempty"`
+	Title       *string         `json:"title,omitempty"`
+	Description *string         `json:"description,omitempty"`
+	Settings    *map[string]any `json:"settings,omitempty"`
 }
 
 // UpdateCampaign updates a campaign (GM only).
@@ -324,15 +323,15 @@ func (s *CampaignService) GetCampaignMembers(
 
 // Helper functions
 
-func defaultCampaignSettings() map[string]interface{} {
-	return map[string]interface{}{
+func defaultCampaignSettings() map[string]any {
+	return map[string]any{
 		"timeGatePreset":          defaultTimeGatePreset,
 		"fogOfWar":                true,
 		"hiddenPosts":             true,
 		"oocVisibility":           defaultOOCVisibility,
 		"characterLimit":          defaultCharacterLimit,
 		"rollRequestTimeoutHours": defaultRollTimeoutHours,
-		"systemPreset": map[string]interface{}{
+		"systemPreset": map[string]any{
 			"name": defaultSystemPresetName,
 			"intentions": []string{
 				"Acrobatics", "Animal Handling", "Arcana", "Athletics",
@@ -346,7 +345,7 @@ func defaultCampaignSettings() map[string]interface{} {
 	}
 }
 
-func validateSettings(settings map[string]interface{}) error {
+func validateSettings(settings map[string]any) error {
 	// Validate time gate preset
 	if timeGate, ok := settings["timeGatePreset"].(string); ok {
 		validPresets := map[string]bool{"24h": true, "2d": true, "3d": true, "4d": true, "5d": true}

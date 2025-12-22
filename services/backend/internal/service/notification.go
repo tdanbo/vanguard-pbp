@@ -79,7 +79,7 @@ type CreateNotificationParams struct {
 	Body        string
 	Link        string
 	IsUrgent    bool
-	Metadata    map[string]interface{}
+	Metadata    map[string]any
 }
 
 // CreateNotification creates a new notification.

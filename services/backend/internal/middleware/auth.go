@@ -85,7 +85,7 @@ func (v *JWTValidator) Close() {
 }
 
 // Keyfunc returns the appropriate key function for JWT parsing.
-func (v *JWTValidator) Keyfunc(token *jwt.Token) (interface{}, error) {
+func (v *JWTValidator) Keyfunc(token *jwt.Token) (any, error) {
 	// If using secret (HS256)
 	if v.useSecret || v.jwks == nil {
 		// Verify the signing method is HMAC
@@ -112,6 +112,7 @@ func (v *JWTValidator) Keyfunc(token *jwt.Token) (interface{}, error) {
 }
 
 // JWKS holds the cached JSON Web Key Set for JWT validation.
+//
 // Deprecated: Use JWTValidator instead for better local dev support.
 type JWKS struct {
 	keyFunc *keyfunc.JWKS
@@ -119,6 +120,7 @@ type JWKS struct {
 
 // NewJWKS creates a new JWKS validator from a Supabase JWKS URL.
 // JWKS URL format: https://[PROJECT_REF].supabase.co/auth/v1/.well-known/jwks.json
+//
 // Deprecated: Use NewJWTValidator instead for better local dev support.
 func NewJWKS(jwksURL string) (*JWKS, error) {
 	//nolint:exhaustruct // keyfunc.Options has many optional fields
@@ -189,6 +191,7 @@ func Auth(validator *JWTValidator) gin.HandlerFunc {
 }
 
 // AuthWithJWKS validates JWTs using JWKS only. Returns 401 if no valid token.
+//
 // Deprecated: Use Auth with JWTValidator instead for better local dev support.
 func AuthWithJWKS(jwks *JWKS) gin.HandlerFunc {
 	return func(c *gin.Context) {

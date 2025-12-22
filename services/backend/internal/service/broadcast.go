@@ -117,9 +117,9 @@ type RollEvent struct {
 }
 
 // broadcastMessage sends a message to a Supabase Realtime channel.
-func (s *BroadcastService) broadcastMessage(ctx context.Context, channel, event string, payload interface{}) error {
+func (s *BroadcastService) broadcastMessage(ctx context.Context, channel, event string, payload any) error {
 	// Construct the broadcast request
-	body := map[string]interface{}{
+	body := map[string]any{
 		"type":    "broadcast",
 		"event":   event,
 		"payload": payload,
@@ -217,7 +217,7 @@ func (s *BroadcastService) BroadcastPostUpdated(
 	ctx context.Context,
 	postID, sceneID, campaignID pgtype.UUID,
 ) {
-	event := map[string]interface{}{
+	event := map[string]any{
 		"type":        EventPostUpdated,
 		"post_id":     uuidToString(postID),
 		"scene_id":    uuidToString(sceneID),
@@ -237,7 +237,7 @@ func (s *BroadcastService) BroadcastPostDeleted(
 	ctx context.Context,
 	postID, sceneID, campaignID pgtype.UUID,
 ) {
-	event := map[string]interface{}{
+	event := map[string]any{
 		"type":        EventPostDeleted,
 		"post_id":     uuidToString(postID),
 		"scene_id":    uuidToString(sceneID),
@@ -392,7 +392,7 @@ func (s *BroadcastService) BroadcastRollResolved(
 	rollID, sceneID, campaignID pgtype.UUID,
 	status string,
 ) {
-	event := map[string]interface{}{
+	event := map[string]any{
 		"type":        EventRollResolved,
 		"roll_id":     uuidToString(rollID),
 		"scene_id":    uuidToString(sceneID),
@@ -414,7 +414,7 @@ func (s *BroadcastService) BroadcastTimeGateWarning(
 	campaignID pgtype.UUID,
 	remainingMinutes int,
 ) {
-	event := map[string]interface{}{
+	event := map[string]any{
 		"type":              EventTimeGateWarning,
 		"campaign_id":       uuidToString(campaignID),
 		"remaining_minutes": remainingMinutes,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -57,8 +58,8 @@ type CampaignPassSummary struct {
 
 // SetPassRequest represents a request to set a character's pass state.
 type SetPassRequest struct {
-	SceneID     pgtype.UUID `json:"-"`
-	CharacterID pgtype.UUID `json:"-"`
+	SceneID     pgtype.UUID `binding:"-"                                      json:"-"`
+	CharacterID pgtype.UUID `binding:"-"                                      json:"-"`
 	PassState   string      `binding:"required,oneof=none passed hard_passed" json:"passState"`
 }
 
@@ -135,14 +136,7 @@ func (s *PassService) SetPass(
 		}
 
 		// Check if character is in the scene
-		inScene := false
-		for _, cid := range scene.CharacterIds {
-			if cid == characterID {
-				inScene = true
-				break
-			}
-		}
-		if !inScene {
+		if !slices.Contains(scene.CharacterIds, characterID) {
 			return ErrCharacterNotInScene
 		}
 	}

@@ -30,7 +30,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.7.2
           working-directory: services/backend
           args: --max-issues-per-linter 0
 

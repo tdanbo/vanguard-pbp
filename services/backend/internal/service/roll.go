@@ -861,7 +861,7 @@ func extractPostContentPreview(postContent []byte) string {
 	if postContent == nil {
 		return ""
 	}
-	var blocks []map[string]interface{}
+	var blocks []map[string]any
 	if err := json.Unmarshal(postContent, &blocks); err != nil || len(blocks) == 0 {
 		return ""
 	}

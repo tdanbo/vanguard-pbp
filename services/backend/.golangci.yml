@@ -1,23 +1,27 @@
 # This file is licensed under the terms of the MIT license https://opensource.org/license/mit
-# Copyright (c) 2021-2025 Marat Reymers
+# Copyright (c) 2021-2025 Marat Reimers
 
-## Golden config for golangci-lint v2.5.0
+## Golden config for golangci-lint v2.7.2
 #
 # This is the best config for golangci-lint based on my experience and opinion.
 # It is very strict, but not extremely strict.
 # Feel free to adapt it to suit your needs.
-# If this config helps you, please consider keeping a link to this file (see the next comment).
+# If this config helps you, please consider keeping a link to this repo (see the next comment).
 
-# Based on https://gist.github.com/maratori/47a4d00457a92aa426dbd48a18776322
+# Based on https://github.com/maratori/golangci-lint-config
 
 version: "2"
+
+issues:
+    # Maximum count of issues with the same text.
+    # Set to 0 to disable.
+    # Default: 3
+    max-same-issues: 50
 
 formatters:
     enable:
         - goimports # checks if the code and import statements are formatted according to the 'goimports' command
-        # Disabled golines due to conflict with tagalign - golines adds whitespace to align struct tags
-        # but tagalign rejects whitespace-only tags
-        #- golines # checks if code is formatted, and fixes long lines
+        - golines # checks if code is formatted, and fixes long lines
 
         ## you may want to enable
         #- gci # checks if code and import statements are formatted, with additional rules
@@ -34,7 +38,10 @@ formatters:
             local-prefixes:
                 - github.com/my/project
 
-        # golines disabled - conflicts with tagalign
+        golines:
+            # Target maximum line length.
+            # Default: 100
+            max-len: 120
 
 linters:
     enable:
@@ -80,6 +87,7 @@ linters:
         - makezero # finds slice declarations with non-zero initial length
         - mirror # reports wrong mirror patterns of bytes/strings usage
         - mnd # detects magic numbers
+        - modernize # suggests simplifications to Go code, using modern language and library features
         - musttag # enforces field tags in (un)marshaled structs
         - nakedret # finds naked returns in functions greater than a specified function length
         - nestif # reports deeply nested if statements
@@ -114,20 +122,19 @@ linters:
         - usetesting # reports uses of functions with replacement inside the testing package
         - wastedassign # finds wasted assignment statements
         - whitespace # detects leading and trailing whitespace
-        - wrapcheck # checks that errors returned from external packages are wrapped
+        #- wrapcheck # checks that errors returned from external packages are wrapped [disabled: too strict for this codebase]
         - tagalign # checks that struct tags are well aligned
-        - ireturn # accept interfaces, return concrete types
-        - exhaustruct
+        - exhaustruct # [highly recommend to enable] checks if all structure fields are initialized
 
         ## you may want to enable
         #- arangolint # opinionated best practices for arangodb client
         #- decorder # checks declaration order and count of types, constants, variables and functions
-        #- exhaustruct # [highly recommend to enable] checks if all structure fields are initialized
         #- ginkgolinter # [if you use ginkgo/gomega] enforces standards of using ginkgo and gomega
         #- godox # detects usage of FIXME, TODO and other keywords inside comments
         #- goheader # checks is file header matches to pattern
         #- inamedparam # [great idea, but too strict, need to ignore a lot of cases by default] reports interfaces with unnamed method parameters
         #- interfacebloat # checks the number of methods inside an interface
+        #- ireturn # accept interfaces, return concrete types
         #- noinlineerr # disallows inline error handling `if err := ...; err != nil {`
         #- prealloc # [premature optimization, but can be used in some cases] finds slice declarations that could potentially be preallocated
         #- varnamelen # [great idea, but too many false positives] checks that the length of a variable's name matches its scope
@@ -432,7 +439,7 @@ linters:
     exclusions:
         # Log a warning if an exclusion rule is unused.
         # Default: false
-        warn-unused: false
+        warn-unused: true
         # Predefined exclusion rules.
         # Default: []
         presets:
@@ -457,34 +464,8 @@ linters:
                   - bodyclose
                   - dupl
                   - errcheck
-                  - exhaustruct
                   - funlen
                   - goconst
                   - gosec
                   - noctx
-                  - wrapcheck
-            # Swagger auto-generated docs files
-            - path: 'docs/docs\.go'
-              linters:
-                  - gochecknoglobals
-                  - gochecknoinits
-                  - godot
-            # Package naming - would require major restructuring
-            - text: "avoid meaningless package names"
-              linters: [revive]
-            # Internal service layer - sqlc generated queries don't need wrapping
-            - path: 'internal/service/'
-              linters:
-                  - wrapcheck
-            # Middleware - internal error handling
-            - path: 'internal/middleware/'
-              linters:
-                  - wrapcheck
-            # Config - internal error handling
-            - path: 'internal/config/'
-              linters:
-                  - wrapcheck
-            # Main - entry point error handling
-            - path: 'cmd/'
-              linters:
                   - wrapcheck

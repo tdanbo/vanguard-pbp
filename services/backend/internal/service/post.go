@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -530,7 +531,7 @@ func (s *PostService) DeletePost(
 
 // ListScenePosts lists all posts in a scene (with witness filtering).
 //
-//nolint:gocognit,nestif // Complex witness filtering logic.
+//nolint:nestif // Complex witness filtering logic.
 func (s *PostService) ListScenePosts(
 	ctx context.Context,
 	userID pgtype.UUID,
@@ -599,11 +600,8 @@ func (s *PostService) ListScenePosts(
 		var filteredPosts []generated.ListScenePostsRow
 		for _, p := range posts {
 			// Check if character is a witness
-			for _, w := range p.Witnesses {
-				if w == characterID {
-					filteredPosts = append(filteredPosts, p)
-					break
-				}
+			if slices.Contains(p.Witnesses, characterID) {
+				filteredPosts = append(filteredPosts, p)
 			}
 		}
 		posts = filteredPosts
@@ -623,8 +621,6 @@ func (s *PostService) ListScenePosts(
 }
 
 // GetPost returns a single post.
-//
-//nolint:gocognit // Complex access control validation.
 func (s *PostService) GetPost(
 	ctx context.Context,
 	userID pgtype.UUID,
@@ -679,13 +675,8 @@ func (s *PostService) GetPost(
 
 		hasAccess := false
 		for _, char := range userChars {
-			for _, w := range post.Witnesses {
-				if w == char.ID {
-					hasAccess = true
-					break
-				}
-			}
-			if hasAccess {
+			if slices.Contains(post.Witnesses, char.ID) {
+				hasAccess = true
 				break
 			}
 		}

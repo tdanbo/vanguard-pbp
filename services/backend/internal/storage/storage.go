@@ -136,7 +136,7 @@ func (c *Client) GetFileSize(ctx context.Context, bucket, path string) (int64, e
 func (c *Client) ListFiles(ctx context.Context, bucket, prefix string) ([]string, error) {
 	url := fmt.Sprintf("%s/storage/v1/object/list/%s", c.supabaseURL, bucket)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"prefix": prefix,
 		"limit":  listFilesLimit,
 	}

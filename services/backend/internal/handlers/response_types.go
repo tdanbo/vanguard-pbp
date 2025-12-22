@@ -11,40 +11,40 @@ import (
 
 // CampaignResponse is the API response format for a campaign with membership info.
 type CampaignResponse struct {
-	ID                    string      `json:"id"`
-	Title                 string      `json:"title"`
-	Description           *string     `json:"description"`
-	OwnerID               *string     `json:"owner_id"`
-	Settings              interface{} `json:"settings"`
-	CurrentPhase          string      `json:"current_phase"`
-	CurrentPhaseStartedAt *time.Time  `json:"current_phase_started_at"`
-	CurrentPhaseExpiresAt *time.Time  `json:"current_phase_expires_at"`
-	IsPaused              bool        `json:"is_paused"`
-	LastGmActivityAt      *time.Time  `json:"last_gm_activity_at"`
-	StorageUsedBytes      int64       `json:"storage_used_bytes"`
-	SceneCount            int32       `json:"scene_count"`
-	CreatedAt             *time.Time  `json:"created_at"`
-	UpdatedAt             *time.Time  `json:"updated_at"`
-	UserRole              *string     `json:"user_role"`
+	ID                    string     `json:"id"`
+	Title                 string     `json:"title"`
+	Description           *string    `json:"description"`
+	OwnerID               *string    `json:"owner_id"`
+	Settings              any        `json:"settings"`
+	CurrentPhase          string     `json:"current_phase"`
+	CurrentPhaseStartedAt *time.Time `json:"current_phase_started_at"`
+	CurrentPhaseExpiresAt *time.Time `json:"current_phase_expires_at"`
+	IsPaused              bool       `json:"is_paused"`
+	LastGmActivityAt      *time.Time `json:"last_gm_activity_at"`
+	StorageUsedBytes      int64      `json:"storage_used_bytes"`
+	SceneCount            int32      `json:"scene_count"`
+	CreatedAt             *time.Time `json:"created_at"`
+	UpdatedAt             *time.Time `json:"updated_at"`
+	UserRole              *string    `json:"user_role"`
 }
 
 // CampaignListResponse is the API response format for campaign list items.
 type CampaignListResponse struct {
-	ID                    string      `json:"id"`
-	Title                 string      `json:"title"`
-	Description           *string     `json:"description"`
-	OwnerID               *string     `json:"owner_id"`
-	Settings              interface{} `json:"settings"`
-	CurrentPhase          string      `json:"current_phase"`
-	CurrentPhaseStartedAt *time.Time  `json:"current_phase_started_at"`
-	CurrentPhaseExpiresAt *time.Time  `json:"current_phase_expires_at"`
-	IsPaused              bool        `json:"is_paused"`
-	LastGmActivityAt      *time.Time  `json:"last_gm_activity_at"`
-	StorageUsedBytes      int64       `json:"storage_used_bytes"`
-	SceneCount            int32       `json:"scene_count"`
-	CreatedAt             *time.Time  `json:"created_at"`
-	UpdatedAt             *time.Time  `json:"updated_at"`
-	UserRole              string      `json:"user_role"`
+	ID                    string     `json:"id"`
+	Title                 string     `json:"title"`
+	Description           *string    `json:"description"`
+	OwnerID               *string    `json:"owner_id"`
+	Settings              any        `json:"settings"`
+	CurrentPhase          string     `json:"current_phase"`
+	CurrentPhaseStartedAt *time.Time `json:"current_phase_started_at"`
+	CurrentPhaseExpiresAt *time.Time `json:"current_phase_expires_at"`
+	IsPaused              bool       `json:"is_paused"`
+	LastGmActivityAt      *time.Time `json:"last_gm_activity_at"`
+	StorageUsedBytes      int64      `json:"storage_used_bytes"`
+	SceneCount            int32      `json:"scene_count"`
+	CreatedAt             *time.Time `json:"created_at"`
+	UpdatedAt             *time.Time `json:"updated_at"`
+	UserRole              string     `json:"user_role"`
 }
 
 // ToCampaignResponse converts a GetCampaignWithMembershipRow to CampaignResponse.
@@ -214,7 +214,7 @@ func textToStringPtr(t pgtype.Text) *string {
 	return &t.String
 }
 
-func decodeSettings(settings []byte) interface{} {
+func decodeSettings(settings []byte) any {
 	if len(settings) == 0 {
 		return nil
 	}
@@ -223,14 +223,14 @@ func decodeSettings(settings []byte) interface{} {
 	decoded, decodeErr := base64.StdEncoding.DecodeString(string(settings))
 	if decodeErr == nil && len(decoded) > 0 && decoded[0] == '{' {
 		// It was base64 encoded, return the decoded JSON
-		var result map[string]interface{}
+		var result map[string]any
 		if unmarshalErr := json.Unmarshal(decoded, &result); unmarshalErr == nil {
 			return result
 		}
 	}
 
 	// Try to parse as direct JSON
-	var result map[string]interface{}
+	var result map[string]any
 	if unmarshalErr := json.Unmarshal(settings, &result); unmarshalErr == nil {
 		return result
 	}

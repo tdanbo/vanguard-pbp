@@ -1,6 +1,8 @@
 // Package dice provides dice rolling functionality with system presets.
 package dice
 
+import "slices"
+
 // dnd5eIntentions provides the default intentions for D&D 5th Edition.
 //
 //nolint:gochecknoglobals // Package-level slice for preset configuration
@@ -81,10 +83,5 @@ func ValidDiceTypes() []string {
 
 // IsValidDiceType checks if a dice type is valid.
 func IsValidDiceType(diceType string) bool {
-	for _, dt := range ValidDiceTypes() {
-		if dt == diceType {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidDiceTypes(), diceType)
 }
