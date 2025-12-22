@@ -14,7 +14,7 @@ import (
 
 // SetPassRequest represents the request body for setting a pass state.
 type SetPassRequest struct {
-	PassState string `json:"passState" binding:"required,oneof=none passed hard_passed"`
+	PassState string `binding:"required,oneof=none passed hard_passed" json:"passState"`
 }
 
 // GetCampaignPassSummary returns the pass summary for a campaign.

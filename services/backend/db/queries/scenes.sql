@@ -243,17 +243,16 @@ WHERE c.campaign_id = $1
   );
 
 -- name: CheckAllCharactersPassed :one
--- Returns true if all active characters in the campaign have passed in their scenes
--- A character is considered passed if they have 'passed' or 'hard_passed' state in ALL their scenes
+-- Returns true if all PCs in active scenes have passed
+-- Only PCs need to pass, NPCs are excluded from this check
 SELECT NOT EXISTS (
     SELECT 1
     FROM characters c
     INNER JOIN scenes s ON c.id = ANY(s.character_ids)
-    LEFT JOIN character_assignments ca ON c.id = ca.character_id
     WHERE s.campaign_id = $1
       AND s.is_archived = false
       AND c.is_archived = false
-      AND ca.user_id IS NOT NULL  -- Only assigned characters (orphaned excluded)
+      AND c.character_type = 'pc'  -- Only PCs need to pass
       AND (
         s.pass_states->c.id::text IS NULL
         OR s.pass_states->c.id::text = '"none"'
@@ -279,32 +278,30 @@ WHERE c.id = $1
 GROUP BY c.id, c.display_name;
 
 -- name: CountUnpassedCharactersInCampaign :one
--- Count characters that haven't passed in at least one scene
+-- Count PCs that haven't passed in at least one scene
 SELECT COUNT(DISTINCT c.id)
 FROM characters c
 INNER JOIN scenes s ON c.id = ANY(s.character_ids)
-LEFT JOIN character_assignments ca ON c.id = ca.character_id
 WHERE s.campaign_id = $1
   AND s.is_archived = false
   AND c.is_archived = false
-  AND ca.user_id IS NOT NULL
+  AND c.character_type = 'pc'  -- Only PCs
   AND (
     s.pass_states->c.id::text IS NULL
     OR s.pass_states->c.id::text = '"none"'
   );
 
 -- name: CountPassedCharactersInCampaign :one
--- Count characters that have passed in all their scenes
+-- Count PCs that have passed in all their scenes
 SELECT COUNT(DISTINCT sub.character_id)
 FROM (
     SELECT c.id AS character_id
     FROM characters c
     INNER JOIN scenes s ON c.id = ANY(s.character_ids)
-    LEFT JOIN character_assignments ca ON c.id = ca.character_id
     WHERE s.campaign_id = $1
       AND s.is_archived = false
       AND c.is_archived = false
-      AND ca.user_id IS NOT NULL
+      AND c.character_type = 'pc'  -- Only PCs
     GROUP BY c.id
     HAVING bool_and(
         s.pass_states->c.id::text IS NOT NULL

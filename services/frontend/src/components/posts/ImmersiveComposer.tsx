@@ -21,6 +21,7 @@ import {
     Plus,
     Trash2,
 } from "lucide-react";
+import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -36,7 +37,8 @@ import { useDraft } from "@/hooks/useDraft";
 import { useCampaignStore } from "@/stores/campaignStore";
 import { useToast } from "@/hooks/use-toast";
 import { LockTimerBar } from "@/components/realtime";
-import type { Character, CampaignSettings, PostBlock, Post } from "@/types";
+import { PassButton } from "@/components/phase/PassButton";
+import type { Character, CampaignSettings, PostBlock, Post, PassState, CampaignPhase } from "@/types";
 
 interface ImmersiveComposerProps {
     campaignId: string;
@@ -54,6 +56,9 @@ interface ImmersiveComposerProps {
     // Delete functionality
     isGM?: boolean;
     onPostDeleted?: () => void;
+    // Phase/pass controls
+    currentPhase?: CampaignPhase;
+    selectedCharacterPassState?: PassState;
 }
 
 export function ImmersiveComposer({
@@ -70,6 +75,8 @@ export function ImmersiveComposer({
     onEditCancel,
     isGM = false,
     onPostDeleted,
+    currentPhase,
+    selectedCharacterPassState,
 }: ImmersiveComposerProps) {
     const { toast } = useToast();
     const { createPost, updatePost, deletePost } = useCampaignStore();
@@ -403,8 +410,8 @@ export function ImmersiveComposer({
     // If no character is selected and not narrator mode, show minimal UI
     if (!character && !isNarrator) {
         return (
-            <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
-                <div className="max-w-5xl mx-auto">
+            <div className="fixed bottom-0 left-0 right-0 lg:left-1/4 lg:right-1/4 p-4 z-40">
+                <div className="w-full">
                     <div className="bg-card rounded-sm px-4 py-3 text-center">
                         <span className="text-sm text-muted-foreground">
                             Select a character to post
@@ -418,8 +425,8 @@ export function ImmersiveComposer({
     // Show locked by other player state
     if (externalLocked && !hasLock) {
         return (
-            <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
-                <div className="max-w-5xl mx-auto">
+            <div className="fixed bottom-0 left-0 right-0 lg:left-1/4 lg:right-1/4 p-4 z-40">
+                <div className="w-full">
                     <div className="bg-card rounded-sm px-4 py-3">
                         <div className="flex items-center justify-center gap-2 text-muted-foreground">
                             <Lock className="h-4 w-4" />
@@ -436,8 +443,8 @@ export function ImmersiveComposer({
     }
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 p-4 z-40">
-            <div className="max-w-5xl mx-auto">
+        <div className="fixed bottom-0 left-0 right-0 lg:left-1/4 lg:right-1/4 p-4 z-40">
+            <div className="w-full">
                 <div className="bg-card rounded-sm overflow-hidden">
                     {/* Lock timer bar (not shown for narrator mode) */}
                     {hasLock && !isNarrator && remainingSeconds > 0 && (
@@ -448,13 +455,28 @@ export function ImmersiveComposer({
                     )}
 
                     {!hasLock ? (
-                        // Not locked - show acquire button
+                        // Not locked - show acquire button with phase/pass controls
                         <div className="p-4 flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">
-                                {isEditMode
-                                    ? "Editing post"
-                                    : `Ready to write as ${displayName}`}
-                            </span>
+                            <div className="flex items-center gap-2">
+                                {character && (
+                                    <CharacterPortrait
+                                        src={character.avatar_url}
+                                        name={character.display_name}
+                                        size="sm"
+                                        variant="circle"
+                                    />
+                                )}
+                                {isNarrator && (
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-900 to-amber-700 flex items-center justify-center flex-shrink-0">
+                                        <BookOpen className="h-4 w-4 text-white/90" />
+                                    </div>
+                                )}
+                                <span className="text-sm text-muted-foreground">
+                                    {isEditMode
+                                        ? "Editing post"
+                                        : `Ready to write as ${displayName}`}
+                                </span>
+                            </div>
                             <div className="flex items-center gap-2">
                                 {isEditMode && (
                                     <Button
@@ -466,6 +488,28 @@ export function ImmersiveComposer({
                                         Cancel
                                     </Button>
                                 )}
+                                {/* Pass button for players and GMs (non-edit mode, PC phase, has PC character) */}
+                                {!isEditMode &&
+                                    !isNarrator &&
+                                    character &&
+                                    character.character_type === 'pc' &&
+                                    currentPhase === "pc_phase" && (
+                                        <PassButton
+                                            campaignId={campaignId}
+                                            sceneId={sceneId}
+                                            characterId={character.id}
+                                            currentState={
+                                                selectedCharacterPassState ||
+                                                "none"
+                                            }
+                                            characterName={
+                                                character.display_name
+                                            }
+                                            isOwner={!isGM}
+                                            isGM={isGM}
+                                            isPCPhase={true}
+                                        />
+                                    )}
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -479,7 +523,7 @@ export function ImmersiveComposer({
                                             <Lock className="h-4 w-4 mr-1" />
                                             {isEditMode
                                                 ? "Edit Post"
-                                                : "Take Post"}
+                                                : "Take Turn"}
                                         </>
                                     )}
                                 </Button>
@@ -490,27 +534,43 @@ export function ImmersiveComposer({
                         <>
                             {/* Mode tabs and intent selector */}
                             <div className="px-4 pt-3 flex items-center justify-between">
-                                <Tabs
-                                    value={mode}
-                                    onValueChange={(v) =>
-                                        setMode(v as "narrative" | "ooc")
-                                    }
-                                >
-                                    <TabsList className="bg-secondary/30 h-8">
-                                        <TabsTrigger
-                                            value="narrative"
-                                            className="text-xs h-7"
-                                        >
-                                            Narrative
-                                        </TabsTrigger>
-                                        <TabsTrigger
-                                            value="ooc"
-                                            className="text-xs h-7"
-                                        >
-                                            OOC
-                                        </TabsTrigger>
-                                    </TabsList>
-                                </Tabs>
+                                <div className="flex items-center gap-3">
+                                    {/* Character portrait */}
+                                    {character && (
+                                        <CharacterPortrait
+                                            src={character.avatar_url}
+                                            name={character.display_name}
+                                            size="sm"
+                                            variant="circle"
+                                        />
+                                    )}
+                                    {isNarrator && (
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-900 to-amber-700 flex items-center justify-center flex-shrink-0">
+                                            <BookOpen className="h-4 w-4 text-white/90" />
+                                        </div>
+                                    )}
+                                    <Tabs
+                                        value={mode}
+                                        onValueChange={(v) =>
+                                            setMode(v as "narrative" | "ooc")
+                                        }
+                                    >
+                                        <TabsList className="bg-secondary/30 h-8">
+                                            <TabsTrigger
+                                                value="narrative"
+                                                className="text-xs h-7"
+                                            >
+                                                Narrative
+                                            </TabsTrigger>
+                                            <TabsTrigger
+                                                value="ooc"
+                                                className="text-xs h-7"
+                                            >
+                                                OOC
+                                            </TabsTrigger>
+                                        </TabsList>
+                                    </Tabs>
+                                </div>
 
                                 {/* Intent dropdown (only in narrative mode) */}
                                 {mode === "narrative" &&

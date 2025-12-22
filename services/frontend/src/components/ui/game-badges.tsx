@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge"
-import { Crown, User, Clock, Check, X, Dice5, Pause } from "lucide-react"
+import { Crown, User, Clock, Check, CheckCheck, X, Dice5, Pause } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // =============== PHASE BADGES ===============
@@ -95,6 +95,24 @@ export function PassBadge({ state, size = "sm" }: PassBadgeProps) {
       <Check className={cn("mr-1", size === "sm" ? "h-3 w-3" : "h-4 w-4")} />
       {config.label}
     </Badge>
+  )
+}
+
+// =============== PASS CHECKMARK (Icon Only) ===============
+
+interface PassCheckmarkProps {
+  state: PassState
+}
+
+export function PassCheckmark({ state }: PassCheckmarkProps) {
+  if (state === "none") return null
+
+  const Icon = state === "hard_passed" ? CheckCheck : Check
+
+  return (
+    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+      <Icon className="h-3 w-3 text-white" />
+    </div>
   )
 }
 

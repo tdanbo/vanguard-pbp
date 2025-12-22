@@ -14,19 +14,19 @@ import (
 
 // CreateSceneRequest represents the request body for creating a scene.
 type CreateSceneRequest struct {
-	Title       string `json:"title"       binding:"required,min=1,max=200"`
-	Description string `json:"description" binding:"max=2000"`
+	Title       string `binding:"required,min=1,max=200" json:"title"`
+	Description string `binding:"max=2000"               json:"description"`
 }
 
 // UpdateSceneRequest represents the request body for updating a scene.
 type UpdateSceneRequest struct {
-	Title       *string `json:"title,omitempty"       binding:"omitempty,min=1,max=200"`
-	Description *string `json:"description,omitempty" binding:"omitempty,max=2000"`
+	Title       *string `binding:"omitempty,min=1,max=200" json:"title,omitempty"`
+	Description *string `binding:"omitempty,max=2000"      json:"description,omitempty"`
 }
 
 // SceneCharacterRequest represents the request body for adding/removing a character.
 type SceneCharacterRequest struct {
-	CharacterID string `json:"characterId" binding:"required"`
+	CharacterID string `binding:"required" json:"characterId"`
 }
 
 // ListCampaignScenes returns all scenes in a campaign.

@@ -12,12 +12,12 @@ import (
 
 // JoinCampaignRequest represents the request to join a campaign via invite code.
 type JoinCampaignRequest struct {
-	Code string `json:"code" binding:"required"`
+	Code string `binding:"required" json:"code"`
 }
 
 // RevokeInviteRequest represents the request to revoke an invite.
 type RevokeInviteRequest struct {
-	InviteID string `json:"inviteId" binding:"required"`
+	InviteID string `binding:"required" json:"inviteId"`
 }
 
 // CreateInvite creates a new invite link for a campaign.

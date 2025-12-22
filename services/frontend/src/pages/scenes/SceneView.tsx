@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ImmersiveLayout } from '@/components/layout/ImmersiveLayout'
+import { ThreeColumnSceneLayout } from '@/components/layout/ThreeColumnSceneLayout'
 import { SceneHeader, SceneHeaderCompact } from '@/components/scene/SceneHeader'
+import { PhaseBar } from '@/components/phase/PhaseBar'
 import { SceneMenu } from '@/components/scene/SceneMenu'
 import { CharacterAssignmentWidget } from '@/components/scene/CharacterAssignmentWidget'
 import { SceneRoster, type SceneRosterCharacter } from '@/components/scene/SceneRoster'
-import { PartyBubbles, type PartyBubbleCharacter } from '@/components/scene/PartyBubbles'
+import { NPCSidebar, type NPCSidebarCharacter } from '@/components/scene/NPCSidebar'
+import { PartySidebar, type PartySidebarCharacter } from '@/components/scene/PartySidebar'
 import { CreateCharacterDialog } from '@/components/character/CreateCharacterDialog'
 import { PostStream } from '@/components/posts/PostStream'
 import { ImmersiveComposer } from '@/components/posts/ImmersiveComposer'
@@ -48,6 +50,7 @@ export default function SceneView() {
     characters,
     posts,
     scenePassStates,
+    phaseStatus,
     loadingCampaign,
     loadingScenes,
     loadingPosts,
@@ -56,10 +59,13 @@ export default function SceneView() {
     fetchCharacters,
     fetchPosts,
     fetchScenePassStates,
+    fetchPhaseStatus,
     setPass,
     clearPass,
     archiveScene,
     addCharacterToScene,
+    transitionPhase,
+    forceTransitionPhase,
   } = useCampaignStore()
 
   const { rolls, getRollsInScene } = useRollStore()
@@ -135,6 +141,12 @@ export default function SceneView() {
     [characters, effectiveSelectedCharacterId]
   )
 
+  // Selected character's pass state
+  const selectedCharacterPassState: PassState = useMemo(() => {
+    if (!effectiveSelectedCharacterId || effectiveSelectedCharacterId === 'narrator') return 'none'
+    return (scenePassStates[effectiveSelectedCharacterId] || 'none') as PassState
+  }, [effectiveSelectedCharacterId, scenePassStates])
+
   // Load data on mount
   useEffect(() => {
     if (!campaignId || !sceneId) return
@@ -150,6 +162,7 @@ export default function SceneView() {
         await Promise.all([
           fetchPosts(campaignId, sceneId),
           getRollsInScene(sceneId),
+          fetchPhaseStatus(campaignId),
         ])
       } catch (error) {
         toast({
@@ -169,6 +182,7 @@ export default function SceneView() {
     fetchCharacters,
     fetchPosts,
     fetchScenePassStates,
+    fetchPhaseStatus,
     getRollsInScene,
     toast,
   ])
@@ -195,17 +209,32 @@ export default function SceneView() {
     [sceneCharacters, scenePassStates, scene, user]
   )
 
-  // Map characters for party bubbles (includes characterType)
-  const partyBubbleCharacters: PartyBubbleCharacter[] = useMemo(
+  // Map characters for sidebars - split by character type
+  const npcSidebarCharacters: NPCSidebarCharacter[] = useMemo(
     () =>
-      sceneCharacters.map((c) => ({
-        id: c.id,
-        displayName: c.display_name,
-        avatarUrl: c.avatar_url,
-        characterType: c.character_type,
-        passState: (scenePassStates[c.id] || scene?.pass_states?.[c.id] || 'none') as PassState,
-        isOwnedByUser: c.assigned_user_id === user?.id,
-      })),
+      sceneCharacters
+        .filter((c) => c.character_type === 'npc')
+        .map((c) => ({
+          id: c.id,
+          displayName: c.display_name,
+          avatarUrl: c.avatar_url,
+          passState: (scenePassStates[c.id] || scene?.pass_states?.[c.id] || 'none') as PassState,
+          isOwnedByUser: c.assigned_user_id === user?.id,
+        })),
+    [sceneCharacters, scenePassStates, scene, user]
+  )
+
+  const partySidebarCharacters: PartySidebarCharacter[] = useMemo(
+    () =>
+      sceneCharacters
+        .filter((c) => c.character_type === 'pc')
+        .map((c) => ({
+          id: c.id,
+          displayName: c.display_name,
+          avatarUrl: c.avatar_url,
+          passState: (scenePassStates[c.id] || scene?.pass_states?.[c.id] || 'none') as PassState,
+          isOwnedByUser: c.assigned_user_id === user?.id,
+        })),
     [sceneCharacters, scenePassStates, scene, user]
   )
 
@@ -251,6 +280,20 @@ export default function SceneView() {
       toast({
         variant: 'destructive',
         title: 'Failed to archive scene',
+        description: (error as Error).message,
+      })
+    }
+  }
+
+  const handleForceGMPhase = async () => {
+    if (!campaignId) return
+    try {
+      await forceTransitionPhase(campaignId, 'gm_phase')
+      toast({ title: 'Forced transition to GM Phase' })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to force phase transition',
         description: (error as Error).message,
       })
     }
@@ -356,10 +399,30 @@ export default function SceneView() {
     : currentCampaign?.current_phase || 'gm_phase'
 
   return (
-    <ImmersiveLayout
+    <ThreeColumnSceneLayout
       backgroundImage={scene.header_image_url}
       onBack={() => navigate(`/campaigns/${campaignId}`)}
       backLabel="Back to campaign"
+      leftSidebar={
+        <NPCSidebar
+          characters={npcSidebarCharacters}
+          isGM={isGM}
+          selectedCharacterId={effectiveSelectedCharacterId}
+          onSelectCharacter={setSelectedCharacterId}
+          onPass={handleBubblePass}
+          onAddNPC={isGM ? handleAddNPC : undefined}
+        />
+      }
+      rightSidebar={
+        <PartySidebar
+          characters={partySidebarCharacters}
+          isGM={isGM}
+          selectedCharacterId={effectiveSelectedCharacterId}
+          onSelectCharacter={setSelectedCharacterId}
+          onPass={handleBubblePass}
+          onAddPC={isGM ? handleAddPC : undefined}
+        />
+      }
       menuContent={
         <div className="flex items-center gap-2">
           {isGM && currentCampaign?.current_phase === 'gm_phase' && !currentCampaign.is_paused && (
@@ -371,6 +434,8 @@ export default function SceneView() {
           )}
           <SceneMenu
             isGM={isGM}
+            currentPhase={currentCampaign?.current_phase}
+            onForceGMPhase={handleForceGMPhase}
             onViewRoster={() => setShowRosterSheet(true)}
             onSettings={() =>
               navigate(`/campaigns/${campaignId}/scenes/${sceneId}/settings`)
@@ -382,7 +447,7 @@ export default function SceneView() {
     >
       {/* Compact header when scrolled */}
       {isScrolled && (
-        <div className="fixed top-0 left-0 right-0 z-40">
+        <div className="fixed top-0 left-0 right-0 lg:left-1/4 lg:right-1/4 z-40">
           <SceneHeaderCompact scene={scene} />
         </div>
       )}
@@ -390,6 +455,30 @@ export default function SceneView() {
       {/* Main content */}
       <div>
         <SceneHeader scene={scene} />
+
+        <PhaseBar
+          currentPhase={currentCampaign?.current_phase || 'gm_phase'}
+          phaseStartedAt={currentCampaign?.current_phase_started_at || null}
+          expiresAt={currentCampaign?.current_phase_expires_at || null}
+          isGM={isGM}
+          canTransition={phaseStatus?.canTransition ?? false}
+          transitionBlock={phaseStatus?.transitionBlock}
+          isPaused={currentCampaign?.is_paused}
+          onTransitionPhase={(toPhase) => {
+            if (!campaignId) return
+            transitionPhase(campaignId, toPhase)
+              .then(() => {
+                toast({ title: `Transitioned to ${toPhase === 'gm_phase' ? 'GM' : 'PC'} Phase` })
+              })
+              .catch((error: Error) => {
+                toast({
+                  variant: 'destructive',
+                  title: 'Failed to transition phase',
+                  description: error.message,
+                })
+              })
+          }}
+        />
 
         <PostStream
           posts={posts}
@@ -405,17 +494,6 @@ export default function SceneView() {
         {/* Spacer for fixed composer */}
         <div className="h-32" />
       </div>
-
-      {/* Party bubbles - NPCs left, PCs right */}
-      <PartyBubbles
-        characters={partyBubbleCharacters}
-        isGM={isGM}
-        selectedCharacterId={effectiveSelectedCharacterId}
-        onSelectCharacter={setSelectedCharacterId}
-        onPass={handleBubblePass}
-        onAddNPC={isGM ? handleAddNPC : undefined}
-        onAddPC={isGM ? handleAddPC : undefined}
-      />
 
       {/* Quick NPC creation dialog (kept for roster sheet) */}
       {scene && (
@@ -470,6 +548,8 @@ export default function SceneView() {
         onEditCancel={handleEditCancel}
         isGM={isGM}
         onPostDeleted={handlePostDeleted}
+        currentPhase={currentCampaign?.current_phase}
+        selectedCharacterPassState={selectedCharacterPassState}
       />
 
       {/* Add Character Dialog */}
@@ -511,6 +591,6 @@ export default function SceneView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </ImmersiveLayout>
+    </ThreeColumnSceneLayout>
   )
 }

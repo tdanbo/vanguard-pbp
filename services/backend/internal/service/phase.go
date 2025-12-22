@@ -180,7 +180,7 @@ func (s *PhaseService) GetPhaseStatus(
 
 // TransitionPhaseRequest represents a request to transition phases.
 type TransitionPhaseRequest struct {
-	ToPhase string `json:"toPhase" binding:"required,oneof=pc_phase gm_phase"`
+	ToPhase string `binding:"required,oneof=pc_phase gm_phase" json:"toPhase"`
 }
 
 // TransitionPhase transitions the campaign to a new phase.

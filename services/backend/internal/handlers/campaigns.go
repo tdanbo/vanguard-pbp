@@ -16,21 +16,21 @@ import (
 
 // CreateCampaignRequest represents the request body for creating a campaign.
 type CreateCampaignRequest struct {
-	Title       string                 `json:"title"              binding:"required,min=1,max=255"`
-	Description string                 `json:"description"        binding:"max=2000"`
+	Title       string                 `binding:"required,min=1,max=255" json:"title"`
+	Description string                 `binding:"max=2000"               json:"description"`
 	Settings    map[string]interface{} `json:"settings,omitempty"`
 }
 
 // UpdateCampaignRequest represents the request body for updating a campaign.
 type UpdateCampaignRequest struct {
-	Title       *string                 `json:"title,omitempty"       binding:"omitempty,min=1,max=255"`
-	Description *string                 `json:"description,omitempty" binding:"omitempty,max=2000"`
+	Title       *string                 `binding:"omitempty,min=1,max=255" json:"title,omitempty"`
+	Description *string                 `binding:"omitempty,max=2000"      json:"description,omitempty"`
 	Settings    *map[string]interface{} `json:"settings,omitempty"`
 }
 
 // DeleteCampaignRequest represents the request body for deleting a campaign.
 type DeleteCampaignRequest struct {
-	ConfirmTitle string `json:"confirmTitle" binding:"required"`
+	ConfirmTitle string `binding:"required" json:"confirmTitle"`
 }
 
 // ListCampaigns returns campaigns for the authenticated user.

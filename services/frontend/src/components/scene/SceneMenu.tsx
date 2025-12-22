@@ -6,10 +6,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, Settings, Users, Archive } from 'lucide-react'
+import { MoreHorizontal, Settings, Users, Archive, Crown } from 'lucide-react'
+import type { CampaignPhase } from '@/types'
 
 interface SceneMenuProps {
   isGM: boolean
+  currentPhase?: CampaignPhase
+  onForceGMPhase?: () => void
   onViewRoster?: () => void
   onSettings?: () => void
   onArchive?: () => void
@@ -17,6 +20,8 @@ interface SceneMenuProps {
 
 export function SceneMenu({
   isGM,
+  currentPhase,
+  onForceGMPhase,
   onViewRoster,
   onSettings,
   onArchive,
@@ -40,6 +45,12 @@ export function SceneMenu({
         {isGM && (
           <>
             <DropdownMenuSeparator />
+            {currentPhase === 'pc_phase' && onForceGMPhase && (
+              <DropdownMenuItem onClick={onForceGMPhase}>
+                <Crown className="h-4 w-4 mr-2" />
+                Force GM Phase
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={onSettings}>
               <Settings className="h-4 w-4 mr-2" />
               Scene Settings

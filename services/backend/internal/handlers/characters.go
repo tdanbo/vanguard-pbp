@@ -13,22 +13,22 @@ import (
 
 // CreateCharacterRequest represents the request body for creating a character.
 type CreateCharacterRequest struct {
-	DisplayName   string  `json:"displayName"            binding:"required,min=1,max=100"`
-	Description   string  `json:"description"            binding:"max=1000"`
-	CharacterType string  `json:"characterType"          binding:"required,oneof=pc npc"`
+	DisplayName   string  `binding:"required,min=1,max=100" json:"displayName"`
+	Description   string  `binding:"max=1000"               json:"description"`
+	CharacterType string  `binding:"required,oneof=pc npc"  json:"characterType"`
 	AssignToUser  *string `json:"assignToUser,omitempty"`
 }
 
 // UpdateCharacterRequest represents the request body for updating a character.
 type UpdateCharacterRequest struct {
-	DisplayName   *string `json:"displayName,omitempty"   binding:"omitempty,min=1,max=100"`
-	Description   *string `json:"description,omitempty"   binding:"omitempty,max=1000"`
-	CharacterType *string `json:"characterType,omitempty" binding:"omitempty,oneof=pc npc"`
+	DisplayName   *string `binding:"omitempty,min=1,max=100" json:"displayName,omitempty"`
+	Description   *string `binding:"omitempty,max=1000"      json:"description,omitempty"`
+	CharacterType *string `binding:"omitempty,oneof=pc npc"  json:"characterType,omitempty"`
 }
 
 // AssignCharacterRequest represents the request body for assigning a character.
 type AssignCharacterRequest struct {
-	UserID string `json:"userId" binding:"required"`
+	UserID string `binding:"required" json:"userId"`
 }
 
 // ListCampaignCharacters returns all characters in a campaign.

@@ -14,7 +14,7 @@ import (
 
 // TransitionPhaseRequest represents the request body for transitioning phases.
 type TransitionPhaseRequest struct {
-	ToPhase string `json:"toPhase" binding:"required,oneof=pc_phase gm_phase"`
+	ToPhase string `binding:"required,oneof=pc_phase gm_phase" json:"toPhase"`
 }
 
 // GetPhaseStatus returns the current phase status of a campaign.
@@ -107,6 +107,22 @@ func handleTransitionPhase(db *database.DB, force bool) gin.HandlerFunc {
 		}
 		BroadcastPhaseTransition(c, campaignID, fromPhase, req.ToPhase, reason)
 
+		// Fetch campaign with user_role for proper response
+		campaignWithRole, err := queries.GetCampaignWithMembership(c.Request.Context(),
+			generated.GetCampaignWithMembershipParams{
+				ID:     campaignID,
+				UserID: userID,
+			})
+		if err != nil {
+			// Fall back to the basic campaign if membership lookup fails
+			// This shouldn't happen since we already verified GM status
+			c.JSON(http.StatusOK, gin.H{
+				"message":  "Phase transitioned successfully",
+				"campaign": campaign,
+			})
+			return
+		}
+
 		message := "Phase transitioned successfully"
 		if force {
 			message = "Phase force transitioned successfully"
@@ -114,7 +130,7 @@ func handleTransitionPhase(db *database.DB, force bool) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":  message,
-			"campaign": campaign,
+			"campaign": ToCampaignResponse(&campaignWithRole),
 		})
 	}
 }

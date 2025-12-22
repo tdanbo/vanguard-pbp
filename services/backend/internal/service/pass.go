@@ -59,7 +59,7 @@ type CampaignPassSummary struct {
 type SetPassRequest struct {
 	SceneID     pgtype.UUID `json:"-"`
 	CharacterID pgtype.UUID `json:"-"`
-	PassState   string      `json:"passState" binding:"required,oneof=none passed hard_passed"`
+	PassState   string      `binding:"required,oneof=none passed hard_passed" json:"passState"`
 }
 
 // SetPass sets the pass state for a character in a scene.

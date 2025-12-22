@@ -40,7 +40,7 @@ export function PostStream({
   }, [rolls])
   if (isLoading) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-2">
+      <div className="w-full px-4 py-6 space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
           <PostStreamSkeleton key={i} />
         ))}
@@ -50,7 +50,7 @@ export function PostStream({
 
   if (posts.length === 0) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="w-full px-4 py-6">
         <div className="bg-card rounded-sm p-8">
           <EmptyPosts variant="compact" />
         </div>
@@ -59,7 +59,7 @@ export function PostStream({
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-2">
+    <div className="w-full px-4 py-6 space-y-2">
       {posts.map((post) => (
         <ImmersivePostCard
           key={post.id}
@@ -80,7 +80,7 @@ export function PostStream({
 function PostStreamSkeleton() {
   return (
     <div className="bg-card rounded-sm overflow-hidden">
-      <div className="grid grid-cols-[100px_1fr] md:grid-cols-[140px_1fr] h-[180px] md:h-[220px]">
+      <div className="grid grid-cols-[80px_1fr] md:grid-cols-[100px_1fr] h-[160px] md:h-[180px]">
         {/* Portrait skeleton - full height */}
         <Skeleton className="h-full" />
 

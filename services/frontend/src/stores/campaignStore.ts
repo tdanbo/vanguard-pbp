@@ -755,11 +755,17 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       const campaign = response.campaign
       set((state) => ({
         campaigns: state.campaigns.map((c) => (c.id === campaignId ? campaign : c)),
-        currentCampaign: state.currentCampaign?.id === campaignId ? campaign : state.currentCampaign,
+        // Preserve user_role if not present in response (defensive)
+        currentCampaign: state.currentCampaign?.id === campaignId
+          ? { ...campaign, user_role: campaign.user_role ?? state.currentCampaign.user_role }
+          : state.currentCampaign,
+        // Clear local pass states since backend resets them on transition
+        scenePassStates: {},
+        passSummary: null,
         loadingPhase: false,
       }))
-      // Refresh phase status after transition
-      await get().fetchPhaseStatus(campaignId)
+      // Refresh phase status and scenes after transition (pass states are reset)
+      await Promise.all([get().fetchPhaseStatus(campaignId), get().fetchScenes(campaignId)])
       return campaign
     } catch (error) {
       set({ error: (error as Error).message, loadingPhase: false })
@@ -777,11 +783,17 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       const campaign = response.campaign
       set((state) => ({
         campaigns: state.campaigns.map((c) => (c.id === campaignId ? campaign : c)),
-        currentCampaign: state.currentCampaign?.id === campaignId ? campaign : state.currentCampaign,
+        // Preserve user_role if not present in response (defensive)
+        currentCampaign: state.currentCampaign?.id === campaignId
+          ? { ...campaign, user_role: campaign.user_role ?? state.currentCampaign.user_role }
+          : state.currentCampaign,
+        // Clear local pass states since backend resets them on transition
+        scenePassStates: {},
+        passSummary: null,
         loadingPhase: false,
       }))
-      // Refresh phase status after transition
-      await get().fetchPhaseStatus(campaignId)
+      // Refresh phase status and scenes after transition (pass states are reset)
+      await Promise.all([get().fetchPhaseStatus(campaignId), get().fetchScenes(campaignId)])
       return campaign
     } catch (error) {
       set({ error: (error as Error).message, loadingPhase: false })

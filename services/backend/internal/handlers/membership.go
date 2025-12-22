@@ -12,7 +12,7 @@ import (
 
 // TransferGmRequest represents the request to transfer GM role.
 type TransferGmRequest struct {
-	NewGmUserID string `json:"newGmUserId" binding:"required"`
+	NewGmUserID string `binding:"required" json:"newGmUserId"`
 }
 
 // LeaveCampaign allows a player to leave a campaign.

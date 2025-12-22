@@ -45,6 +45,9 @@ export function ImmersivePostCard({
     // Show roll button if post has intention or roll data
     const hasRoll = Boolean(post.intention || roll);
 
+    // Check if this is a narrator post (no character)
+    const isNarrator = !post.characterId;
+
     // For hidden posts that user can't see
     if (post.isHidden && !isGM && !isOwner) {
         return (
@@ -65,17 +68,22 @@ export function ImmersivePostCard({
                     post.isHidden && "border border-dashed border-border/30",
                 )}
             >
-                <div className="grid grid-cols-[100px_1fr] md:grid-cols-[140px_1fr] h-[180px] md:h-[220px]">
-                    {/* Portrait column - full height */}
-                    <div className="relative h-full">
-                        <CharacterPortrait
-                            src={post.characterAvatar}
-                            name={post.characterName}
-                            size="lg"
-                            variant="square"
-                            className="w-full h-full rounded-none border-0"
-                        />
-                    </div>
+                <div className={cn(
+                    "h-[160px] md:h-[180px]",
+                    isNarrator ? "block" : "grid grid-cols-[80px_1fr] md:grid-cols-[100px_1fr]"
+                )}>
+                    {/* Portrait column - full height (not shown for narrator) */}
+                    {!isNarrator && (
+                        <div className="relative h-full">
+                            <CharacterPortrait
+                                src={post.characterAvatar}
+                                name={post.characterName}
+                                size="lg"
+                                variant="square"
+                                className="w-full h-full rounded-none border-0"
+                            />
+                        </div>
+                    )}
 
                     {/* Content column */}
                     <div className="p-4 relative h-full flex flex-col overflow-hidden">
@@ -163,7 +171,10 @@ export function ImmersivePostCard({
                 </div>
                 {/* OOC content (expandable) */}
                 {hasOOC && canSeeOOC && showOOC && (
-                    <div className="px-4 pb-4 ml-[100px] md:ml-[140px]">
+                    <div className={cn(
+                        "px-4 pb-4",
+                        !isNarrator && "ml-[80px] md:ml-[100px]"
+                    )}>
                         <div className="bg-secondary/30 rounded p-3">
                             <p className="text-sm text-muted-foreground">
                                 <span className="font-medium">OOC:</span>{" "}
