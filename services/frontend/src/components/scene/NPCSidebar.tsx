@@ -1,6 +1,6 @@
-import { CharacterPortrait } from '@/components/character/CharacterPortrait'
-import { PassCheckmark } from '@/components/ui/game-badges'
-import { BookOpen, Plus } from 'lucide-react'
+import { CharacterBubble, type CharacterBubbleCharacter } from '@/components/character/CharacterBubble'
+import { AddBubble } from '@/components/character/AddBubble'
+import { BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { PassState } from '@/types'
 
@@ -59,6 +59,15 @@ export function NPCSidebar({
 
   if (!showNPCArea) return null
 
+  const getTitle = (character: NPCSidebarCharacter, isSelected: boolean) => {
+    const canInteract = isGM || character.isOwnedByUser
+    if (!canInteract) return character.displayName
+    if (isGM) return `Post as ${character.displayName}`
+    return isSelected
+      ? `Click to pass as ${character.displayName}`
+      : `Select ${character.displayName}`
+  }
+
   return (
     <div className="flex flex-col items-center gap-3">
       <span className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
@@ -73,95 +82,27 @@ export function NPCSidebar({
         />
       )}
 
-      {visibleCharacters.map((character) => (
-        <CharacterBubble
-          key={character.id}
-          character={character}
-          isSelected={selectedCharacterId === character.id}
-          isGM={isGM}
-          onClick={() => handleBubbleClick(character)}
-        />
-      ))}
+      {visibleCharacters.map((character) => {
+        const isSelected = selectedCharacterId === character.id
+        const canInteract = isGM || character.isOwnedByUser
+
+        return (
+          <CharacterBubble
+            key={character.id}
+            character={character as CharacterBubbleCharacter}
+            size="lg"
+            isSelected={isSelected}
+            showName={true}
+            onClick={() => handleBubbleClick(character)}
+            disabled={!canInteract}
+            title={getTitle(character, isSelected)}
+          />
+        )
+      })}
 
       {/* Add NPC button (GM only) */}
-      {isGM && onAddNPC && <AddBubble onClick={onAddNPC} label="Add NPC" />}
+      {isGM && onAddNPC && <AddBubble onClick={() => onAddNPC()} label="Add NPC" size="lg" />}
     </div>
-  )
-}
-
-interface CharacterBubbleProps {
-  character: NPCSidebarCharacter
-  isSelected: boolean
-  isGM: boolean
-  onClick: () => void
-}
-
-function CharacterBubble({
-  character,
-  isSelected,
-  isGM,
-  onClick,
-}: CharacterBubbleProps) {
-  const canInteract = isGM || character.isOwnedByUser
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={!canInteract}
-      className={cn(
-        'flex flex-col items-center gap-1 transition-all group',
-        canInteract && 'cursor-pointer hover:scale-105',
-        !canInteract && 'cursor-default opacity-80'
-      )}
-      title={
-        canInteract
-          ? isGM
-            ? `Post as ${character.displayName}`
-            : isSelected
-              ? `Click to pass as ${character.displayName}`
-              : `Select ${character.displayName}`
-          : character.displayName
-      }
-    >
-      {/* Portrait with selection ring and pass overlay */}
-      <div className="relative">
-        <div
-          className={cn(
-            'rounded-full p-0.5 transition-all',
-            isSelected &&
-              'ring-2 ring-gold ring-offset-2 ring-offset-background'
-          )}
-        >
-          <CharacterPortrait
-            src={character.avatarUrl}
-            name={character.displayName}
-            size="lg"
-            variant="circle"
-            className={cn(
-              'border-2',
-              isSelected ? 'border-gold' : 'border-border/50'
-            )}
-          />
-        </div>
-
-        {/* Pass state checkmark */}
-        {character.passState !== 'none' && (
-          <div className="absolute -bottom-1 -right-1">
-            <PassCheckmark state={character.passState} />
-          </div>
-        )}
-      </div>
-
-      {/* Name label */}
-      <span
-        className={cn(
-          'text-xs max-w-[60px] truncate text-center',
-          isSelected ? 'text-gold font-medium' : 'text-muted-foreground'
-        )}
-      >
-        {character.displayName}
-      </span>
-    </button>
   )
 }
 
@@ -173,6 +114,7 @@ interface NarratorBubbleProps {
 function NarratorBubble({ isSelected, onClick }: NarratorBubbleProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="flex flex-col items-center gap-1 transition-all cursor-pointer hover:scale-105"
       title="Post as Narrator"
@@ -199,25 +141,6 @@ function NarratorBubble({ isSelected, onClick }: NarratorBubbleProps) {
       >
         Narrator
       </span>
-    </button>
-  )
-}
-
-interface AddBubbleProps {
-  onClick: () => void
-  label: string
-}
-
-function AddBubble({ onClick, label }: AddBubbleProps) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center gap-1 transition-all cursor-pointer hover:scale-105"
-      title={label}
-    >
-      <div className="h-16 w-16 rounded-full flex items-center justify-center transition-all bg-background/40 backdrop-blur-md border border-border/30 hover:border-gold/50 hover:bg-background/60">
-        <Plus className="h-5 w-5 text-muted-foreground" />
-      </div>
     </button>
   )
 }

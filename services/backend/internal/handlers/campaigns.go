@@ -33,6 +33,17 @@ type DeleteCampaignRequest struct {
 	ConfirmTitle string `binding:"required" json:"confirmTitle"`
 }
 
+// CampaignMemberResponse represents a campaign member with alias and email.
+type CampaignMemberResponse struct {
+	ID         string `json:"id"`
+	CampaignID string `json:"campaign_id"`
+	UserID     string `json:"user_id"`
+	Role       string `json:"role"`
+	Alias      string `json:"alias,omitempty"`
+	Email      string `json:"email,omitempty"`
+	JoinedAt   string `json:"joined_at"`
+}
+
 // ListCampaigns returns campaigns for the authenticated user.
 func ListCampaigns(db *database.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -293,7 +304,34 @@ func GetCampaignMembers(db *database.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"members": members})
+		// Check if current user is GM
+		isGM, err := svc.IsUserGM(c.Request.Context(), campaignID, userID)
+		if err != nil {
+			models.InternalError(c)
+			return
+		}
+
+		// Build response with alias, and email only for GMs
+		response := make([]CampaignMemberResponse, len(members))
+		currentUserEmail, _ := middleware.GetUserEmail(c)
+		
+		for i, member := range members {
+			response[i] = CampaignMemberResponse{
+				ID:         member.ID.String(),
+				CampaignID: member.CampaignID.String(),
+				UserID:     member.UserID.String(),
+				Role:       string(member.Role),
+				Alias:      member.Alias.String,
+				JoinedAt:   member.JoinedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			}
+
+			// For GMs, include email if it's the current user
+			if isGM && member.UserID == userID && currentUserEmail != "" {
+				response[i].Email = currentUserEmail
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"members": response})
 	}
 }
 

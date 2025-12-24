@@ -25,6 +25,7 @@ var (
 	ErrNotLockOwner      = errors.New("you do not own this compose lock")
 	ErrCharacterNotOwned = errors.New("you do not own this character")
 	ErrNotInPCPhase      = errors.New("posts can only be created during PC Phase")
+	ErrTimeGateExpired   = errors.New("time gate has expired, cannot compose posts")
 )
 
 // ComposeService handles compose lock business logic.
@@ -87,6 +88,22 @@ func (s *ComposeService) AcquireLock(
 
 	if !isGM && sceneWithCampaign.CurrentPhase != generated.CampaignPhasePcPhase {
 		return nil, ErrNotInPCPhase
+	}
+
+	// Check if time gate has expired (lazy processing)
+	if !isGM && sceneWithCampaign.CurrentPhase == generated.CampaignPhasePcPhase {
+		if sceneWithCampaign.CurrentPhaseExpiresAt.Valid &&
+			time.Now().After(sceneWithCampaign.CurrentPhaseExpiresAt.Time) {
+			// Time gate expired - auto-pass all characters
+			passSvc := NewPassService(s.pool)
+			if passErr := passSvc.AutoPassAllCharacters(ctx, sceneWithCampaign.CampaignID); passErr != nil {
+				// Log error but continue - auto-pass is best-effort
+				_ = passErr
+			}
+
+			// Block lock acquisition for players
+			return nil, ErrTimeGateExpired
+		}
 	}
 
 	// Verify character is in scene

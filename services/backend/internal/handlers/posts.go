@@ -389,6 +389,12 @@ func handlePostError(c *gin.Context, err error) {
 		models.ValidationError(c, "Character is not in this scene")
 	case errors.Is(err, service.ErrNotInPCPhase):
 		models.ValidationError(c, "Posts can only be created during PC Phase")
+	case errors.Is(err, service.ErrTimeGateExpired):
+		models.RespondError(
+			c,
+			http.StatusForbidden,
+			models.NewAPIError("TIME_GATE_EXPIRED", "Time gate has expired. Waiting for GM to transition phase."),
+		)
 	case errors.Is(err, service.ErrNotGM):
 		models.RespondError(
 			c,

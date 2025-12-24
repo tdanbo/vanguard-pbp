@@ -40,7 +40,7 @@ export function PostStream({
   }, [rolls])
   if (isLoading) {
     return (
-      <div className="w-full px-4 py-6 space-y-2">
+      <div className="w-full space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
           <PostStreamSkeleton key={i} />
         ))}
@@ -50,7 +50,7 @@ export function PostStream({
 
   if (posts.length === 0) {
     return (
-      <div className="w-full px-4 py-6">
+      <div className="w-full">
         <div className="bg-card rounded-sm p-8">
           <EmptyPosts variant="compact" />
         </div>
@@ -59,7 +59,7 @@ export function PostStream({
   }
 
   return (
-    <div className="w-full px-4 py-6 space-y-2">
+    <div className="w-full space-y-2">
       {posts.map((post) => (
         <ImmersivePostCard
           key={post.id}

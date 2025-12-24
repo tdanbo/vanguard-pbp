@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ThreeColumnSceneLayout } from '@/components/layout/ThreeColumnSceneLayout'
-import { SceneHeader, SceneHeaderCompact } from '@/components/scene/SceneHeader'
-import { PhaseBar } from '@/components/phase/PhaseBar'
+import { SceneHeaderCompact } from '@/components/scene/SceneHeader'
+import { UnifiedHeader } from '@/components/phase/UnifiedHeader'
 import { SceneMenu } from '@/components/scene/SceneMenu'
 import { CharacterAssignmentWidget } from '@/components/scene/CharacterAssignmentWidget'
 import { SceneRoster, type SceneRosterCharacter } from '@/components/scene/SceneRoster'
@@ -33,7 +33,8 @@ import { useCampaignStore } from '@/stores/campaignStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useRollStore } from '@/stores/rollStore'
 import { useToast } from '@/hooks/use-toast'
-import type { PassState, CampaignPhase, CampaignSettings, Post } from '@/types'
+import { useSceneSubscription } from '@/hooks/useSceneSubscription'
+import type { PassState, CampaignPhase, CampaignSettings, Post, PassStateEvent } from '@/types'
 
 export default function SceneView() {
   const { id: campaignId, sceneId } = useParams<{
@@ -52,7 +53,6 @@ export default function SceneView() {
     scenePassStates,
     phaseStatus,
     loadingCampaign,
-    loadingScenes,
     loadingPosts,
     fetchCampaign,
     fetchScenes,
@@ -186,6 +186,19 @@ export default function SceneView() {
     getRollsInScene,
     toast,
   ])
+
+  // Subscribe to scene events (pass state changes, posts, etc.)
+  useSceneSubscription({
+    sceneId: sceneId || null,
+    handlers: {
+      onPassStateChanged: (_event: PassStateEvent) => {
+        // Refetch pass states when they change
+        if (campaignId && sceneId) {
+          fetchScenePassStates(campaignId, sceneId)
+        }
+      },
+    },
+  })
 
   // Handle scroll for compact header
   useEffect(() => {
@@ -384,8 +397,8 @@ export default function SceneView() {
     setAssignmentWidgetOpen(true)
   }
 
-  // Loading state
-  if (loadingCampaign || loadingScenes || !scene) {
+  // Loading state (only for initial load, not during scene updates)
+  if (loadingCampaign || !scene) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -421,6 +434,7 @@ export default function SceneView() {
           onSelectCharacter={setSelectedCharacterId}
           onPass={handleBubblePass}
           onAddPC={isGM ? handleAddPC : undefined}
+          isExpired={phaseStatus?.isExpired ?? false}
         />
       }
       menuContent={
@@ -454,45 +468,57 @@ export default function SceneView() {
 
       {/* Main content */}
       <div>
-        <SceneHeader scene={scene} />
-
-        <PhaseBar
-          currentPhase={currentCampaign?.current_phase || 'gm_phase'}
-          phaseStartedAt={currentCampaign?.current_phase_started_at || null}
-          expiresAt={currentCampaign?.current_phase_expires_at || null}
-          isGM={isGM}
-          canTransition={phaseStatus?.canTransition ?? false}
-          transitionBlock={phaseStatus?.transitionBlock}
-          isPaused={currentCampaign?.is_paused}
-          onTransitionPhase={(toPhase) => {
-            if (!campaignId) return
-            transitionPhase(campaignId, toPhase)
-              .then(() => {
-                toast({ title: `Transitioned to ${toPhase === 'gm_phase' ? 'GM' : 'PC'} Phase` })
-              })
-              .catch((error: Error) => {
-                toast({
-                  variant: 'destructive',
-                  title: 'Failed to transition phase',
-                  description: error.message,
+        <div className="px-4 md:px-6 lg:px-8 pt-16">
+          <UnifiedHeader
+            title={scene.title}
+            description={scene.description}
+            currentPhase={currentCampaign?.current_phase || 'gm_phase'}
+            phaseStartedAt={currentCampaign?.current_phase_started_at || null}
+            expiresAt={currentCampaign?.current_phase_expires_at || null}
+            isPaused={currentCampaign?.is_paused}
+            isExpired={phaseStatus?.isExpired ?? false}
+            playersRemaining={
+              phaseStatus
+                ? phaseStatus.totalCount - phaseStatus.passedCount
+                : 0
+            }
+            totalPlayers={phaseStatus?.totalCount || 0}
+            isGM={isGM}
+            canTransition={phaseStatus?.canTransition ?? false}
+            transitionBlock={phaseStatus?.transitionBlock}
+            onTransitionPhase={(toPhase) => {
+              if (!campaignId) return
+              transitionPhase(campaignId, toPhase)
+                .then(() => {
+                  toast({ title: `Transitioned to ${toPhase === 'gm_phase' ? 'GM' : 'PC'} Phase` })
                 })
-              })
-          }}
-        />
+                .catch((error: Error) => {
+                  toast({
+                    variant: 'destructive',
+                    title: 'Failed to transition phase',
+                    description: error.message,
+                  })
+                })
+            }}
+            className="mb-8"
+          />
+        </div>
 
-        <PostStream
-          posts={posts}
-          settings={settings}
-          rolls={rolls}
-          isGM={isGM}
-          currentUserId={user?.id}
-          isLoading={loadingPosts}
-          onEditPost={handleEditPost}
-          onRollUpdated={handleRollUpdated}
-        />
+        <div className="px-4 md:px-6 lg:px-8 pt-4">
+          <PostStream
+            posts={posts}
+            settings={settings}
+            rolls={rolls}
+            isGM={isGM}
+            currentUserId={user?.id}
+            isLoading={loadingPosts}
+            onEditPost={handleEditPost}
+            onRollUpdated={handleRollUpdated}
+          />
 
-        {/* Spacer for fixed composer */}
-        <div className="h-32" />
+          {/* Spacer for fixed composer */}
+          <div className="h-32" />
+        </div>
       </div>
 
       {/* Quick NPC creation dialog (kept for roster sheet) */}
@@ -550,6 +576,7 @@ export default function SceneView() {
         onPostDeleted={handlePostDeleted}
         currentPhase={currentCampaign?.current_phase}
         selectedCharacterPassState={selectedCharacterPassState}
+        isExpired={phaseStatus?.isExpired ?? false}
       />
 
       {/* Add Character Dialog */}

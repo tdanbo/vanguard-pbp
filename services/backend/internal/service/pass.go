@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -13,6 +14,7 @@ import (
 )
 
 // Pass errors (using existing errors from other services where applicable).
+// Note: ErrTimeGateExpired is defined in compose.go and reused here.
 var (
 	ErrCannotPassPendingRolls = errors.New("cannot pass with pending rolls")
 	ErrInvalidPassState       = errors.New("invalid pass state")
@@ -113,6 +115,11 @@ func (s *PassService) SetPass(
 	}
 
 	if !isGM {
+		// Check if time gate has expired (players cannot pass after expiration)
+		if scene.CurrentPhaseExpiresAt.Valid && time.Now().After(scene.CurrentPhaseExpiresAt.Time) {
+			return ErrTimeGateExpired
+		}
+
 		// Get character to verify it exists
 		_, charErr := s.queries.GetCharacter(ctx, characterID)
 		if charErr != nil {
@@ -336,6 +343,69 @@ func (s *PassService) GetScenePassStates(
 	}
 
 	return passStates, nil
+}
+
+// AutoPassAllCharacters sets all unpassed PCs in the campaign to "passed" state.
+// Called lazily when time gate has expired and a user interacts with the system.
+func (s *PassService) AutoPassAllCharacters(ctx context.Context, campaignID pgtype.UUID) error {
+	scenes, err := s.queries.GetAllActiveScenesInCampaign(ctx, campaignID)
+	if err != nil {
+		return err
+	}
+
+	for _, scene := range scenes {
+		// Process each scene individually, continue on error (best effort)
+		_ = s.autoPassCharactersInScene(ctx, scene)
+	}
+
+	return nil
+}
+
+// autoPassCharactersInScene marks all unpassed PCs in a single scene as passed.
+func (s *PassService) autoPassCharactersInScene(
+	ctx context.Context,
+	scene generated.Scene,
+) error {
+	var passStates map[string]string
+	if unmarshalErr := json.Unmarshal(scene.PassStates, &passStates); unmarshalErr != nil {
+		passStates = make(map[string]string)
+	}
+
+	chars, charsErr := s.queries.GetSceneCharacters(ctx, scene.ID)
+	if charsErr != nil {
+		return charsErr
+	}
+
+	needsUpdate := false
+	for _, char := range chars {
+		if char.CharacterType != generated.CharacterTypePc {
+			continue
+		}
+
+		charIDStr := formatPgtypeUUID(char.ID)
+		if passStates[charIDStr] != PassStateHardPassed {
+			// Use hard_passed for time gate expiration (system-enforced, can't be cleared)
+			// This upgrades both "none" and "passed" to "hard_passed"
+			passStates[charIDStr] = PassStateHardPassed
+			needsUpdate = true
+		}
+	}
+
+	if !needsUpdate {
+		return nil
+	}
+
+	passStatesJSON, marshalErr := json.Marshal(passStates)
+	if marshalErr != nil {
+		return marshalErr
+	}
+
+	_, updateErr := s.queries.UpdateScenePassStates(ctx, generated.UpdateScenePassStatesParams{
+		ID:         scene.ID,
+		PassStates: passStatesJSON,
+	})
+
+	return updateErr
 }
 
 // checkCharacterHasPendingRolls checks if a character has any pending rolls.

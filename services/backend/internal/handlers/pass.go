@@ -175,6 +175,13 @@ func handlePassError(c *gin.Context, err error) {
 		models.ValidationError(c, "Character is not in this scene")
 	case errors.Is(err, service.ErrNotInPCPhase):
 		models.ValidationError(c, "Can only pass during PC phase")
+	case errors.Is(err, service.ErrTimeGateExpired):
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": gin.H{
+				"code":    "TIME_GATE_EXPIRED",
+				"message": "Phase has expired. Waiting for GM to transition.",
+			},
+		})
 	case errors.Is(err, service.ErrCannotPassPendingRolls):
 		models.ValidationError(c, "Cannot pass with pending rolls")
 	case errors.Is(err, service.ErrInvalidPassState):

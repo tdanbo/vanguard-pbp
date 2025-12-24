@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useCampaignStore } from '@/stores/campaignStore'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 
@@ -16,6 +18,7 @@ export default function JoinCampaign() {
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [alias, setAlias] = useState('')
 
   useEffect(() => {
     if (code) {
@@ -30,7 +33,7 @@ export default function JoinCampaign() {
     if (!code) return
     setJoining(true)
     try {
-      const campaign = await joinCampaign(code)
+      const campaign = await joinCampaign(code, alias || undefined)
       toast({
         title: 'Joined campaign',
         description: `You've joined "${campaign.title}".`,
@@ -84,6 +87,20 @@ export default function JoinCampaign() {
           <div className="rounded-lg bg-muted p-4 text-center">
             <h3 className="text-xl font-semibold">{campaignInfo?.campaignTitle}</h3>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="alias">OOC Alias</Label>
+            <Input
+              id="alias"
+              placeholder="Enter an out-of-character alias"
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              This is not your character name but an out-of-character alias. You can change it later.
+            </p>
+          </div>
+
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" asChild>
               <Link to="/">Cancel</Link>

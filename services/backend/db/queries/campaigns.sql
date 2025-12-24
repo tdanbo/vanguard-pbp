@@ -14,9 +14,10 @@ RETURNING *;
 INSERT INTO campaign_members (
     campaign_id,
     user_id,
-    role
+    role,
+    alias
 ) VALUES (
-    $1, $2, $3
+    $1, $2, $3, $4
 )
 RETURNING *;
 
@@ -66,7 +67,12 @@ DELETE FROM campaigns WHERE id = $1;
 
 -- name: GetCampaignMembers :many
 SELECT
-    cm.*
+    cm.id,
+    cm.campaign_id,
+    cm.user_id,
+    cm.role,
+    cm.alias,
+    cm.joined_at
 FROM campaign_members cm
 WHERE cm.campaign_id = $1
 ORDER BY cm.role DESC, cm.joined_at ASC;

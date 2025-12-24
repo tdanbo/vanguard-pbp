@@ -15,21 +15,28 @@ const addCampaignMember = `-- name: AddCampaignMember :one
 INSERT INTO campaign_members (
     campaign_id,
     user_id,
-    role
+    role,
+    alias
 ) VALUES (
-    $1, $2, $3
+    $1, $2, $3, $4
 )
-RETURNING id, campaign_id, user_id, role, joined_at
+RETURNING id, campaign_id, user_id, role, joined_at, alias
 `
 
 type AddCampaignMemberParams struct {
 	CampaignID pgtype.UUID `json:"campaign_id"`
 	UserID     pgtype.UUID `json:"user_id"`
 	Role       MemberRole  `json:"role"`
+	Alias      pgtype.Text `json:"alias"`
 }
 
 func (q *Queries) AddCampaignMember(ctx context.Context, arg AddCampaignMemberParams) (CampaignMember, error) {
-	row := q.db.QueryRow(ctx, addCampaignMember, arg.CampaignID, arg.UserID, arg.Role)
+	row := q.db.QueryRow(ctx, addCampaignMember,
+		arg.CampaignID,
+		arg.UserID,
+		arg.Role,
+		arg.Alias,
+	)
 	var i CampaignMember
 	err := row.Scan(
 		&i.ID,
@@ -37,6 +44,7 @@ func (q *Queries) AddCampaignMember(ctx context.Context, arg AddCampaignMemberPa
 		&i.UserID,
 		&i.Role,
 		&i.JoinedAt,
+		&i.Alias,
 	)
 	return i, err
 }
@@ -221,7 +229,7 @@ func (q *Queries) GetCampaign(ctx context.Context, id pgtype.UUID) (Campaign, er
 }
 
 const getCampaignMember = `-- name: GetCampaignMember :one
-SELECT id, campaign_id, user_id, role, joined_at FROM campaign_members
+SELECT id, campaign_id, user_id, role, joined_at, alias FROM campaign_members
 WHERE campaign_id = $1 AND user_id = $2
 `
 
@@ -239,6 +247,7 @@ func (q *Queries) GetCampaignMember(ctx context.Context, arg GetCampaignMemberPa
 		&i.UserID,
 		&i.Role,
 		&i.JoinedAt,
+		&i.Alias,
 	)
 	return i, err
 }
@@ -257,26 +266,41 @@ func (q *Queries) GetCampaignMemberCount(ctx context.Context, campaignID pgtype.
 
 const getCampaignMembers = `-- name: GetCampaignMembers :many
 SELECT
-    cm.id, cm.campaign_id, cm.user_id, cm.role, cm.joined_at
+    cm.id,
+    cm.campaign_id,
+    cm.user_id,
+    cm.role,
+    cm.alias,
+    cm.joined_at
 FROM campaign_members cm
 WHERE cm.campaign_id = $1
 ORDER BY cm.role DESC, cm.joined_at ASC
 `
 
-func (q *Queries) GetCampaignMembers(ctx context.Context, campaignID pgtype.UUID) ([]CampaignMember, error) {
+type GetCampaignMembersRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	CampaignID pgtype.UUID        `json:"campaign_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Role       MemberRole         `json:"role"`
+	Alias      pgtype.Text        `json:"alias"`
+	JoinedAt   pgtype.Timestamptz `json:"joined_at"`
+}
+
+func (q *Queries) GetCampaignMembers(ctx context.Context, campaignID pgtype.UUID) ([]GetCampaignMembersRow, error) {
 	rows, err := q.db.Query(ctx, getCampaignMembers, campaignID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CampaignMember
+	var items []GetCampaignMembersRow
 	for rows.Next() {
-		var i CampaignMember
+		var i GetCampaignMembersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CampaignID,
 			&i.UserID,
 			&i.Role,
+			&i.Alias,
 			&i.JoinedAt,
 		); err != nil {
 			return nil, err

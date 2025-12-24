@@ -67,6 +67,7 @@ type PhaseStatus struct {
 	StartedAt       *time.Time `json:"startedAt,omitempty"`
 	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
 	IsPaused        bool       `json:"isPaused"`
+	IsExpired       bool       `json:"isExpired"`
 	TimeGatePreset  string     `json:"timeGatePreset,omitempty"`
 	PassedCount     int64      `json:"passedCount"`
 	TotalCount      int64      `json:"totalCount"`
@@ -77,7 +78,7 @@ type PhaseStatus struct {
 
 // GetPhaseStatus returns the current phase status of a campaign.
 //
-//nolint:gocognit // Phase status collection requires multiple condition checks
+//nolint:gocognit,funlen // Phase status collection requires multiple condition checks
 func (s *PhaseService) GetPhaseStatus(
 	ctx context.Context,
 	campaignID, userID pgtype.UUID,
@@ -173,6 +174,31 @@ func (s *PhaseService) GetPhaseStatus(
 
 	if preset, ok := phaseInfo.TimeGatePreset.(string); ok {
 		status.TimeGatePreset = preset
+	}
+
+	// Check if time gate has expired (PC Phase only)
+	if status.CurrentPhase == PhasePCPhase && status.ExpiresAt != nil {
+		status.IsExpired = time.Now().After(*status.ExpiresAt)
+	}
+
+	// When expired, auto-pass all characters and update counts
+	if status.IsExpired && status.CurrentPhase == PhasePCPhase {
+		// Auto-pass all characters (lazy processing)
+		passSvc := NewPassService(s.pool)
+		_ = passSvc.AutoPassAllCharacters(ctx, campaignID) // Best effort
+
+		// Update counts to reflect auto-pass (all characters now passed)
+		status.PassedCount = totalCount
+		status.AllPassed = true
+
+		// Update transition logic - expired means can transition
+		// Check for pending rolls first
+		pendingRolls, rollErr := s.queries.CountPendingRollsInCampaign(ctx, campaignID)
+		if rollErr == nil && pendingRolls == 0 {
+			// No pending rolls - allow transition when expired
+			status.CanTransition = true
+			status.TransitionBlock = ""
+		}
 	}
 
 	return status, nil

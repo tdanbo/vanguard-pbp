@@ -1,4 +1,4 @@
-export { PhaseBar } from './PhaseBar'
+export { UnifiedHeader } from './UnifiedHeader'
 export { PhaseIndicator } from './PhaseIndicator'
 export { PhaseTransitionButton } from './PhaseTransitionButton'
 export { PassButton } from './PassButton'

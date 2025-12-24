@@ -36,6 +36,7 @@ import { useComposeLock } from "@/hooks/useComposeLock";
 import { useDraft } from "@/hooks/useDraft";
 import { useCampaignStore } from "@/stores/campaignStore";
 import { useToast } from "@/hooks/use-toast";
+import { APIError } from "@/lib/api";
 import { LockTimerBar } from "@/components/realtime";
 import { PassButton } from "@/components/phase/PassButton";
 import type { Character, CampaignSettings, PostBlock, Post, PassState, CampaignPhase } from "@/types";
@@ -59,6 +60,8 @@ interface ImmersiveComposerProps {
     // Phase/pass controls
     currentPhase?: CampaignPhase;
     selectedCharacterPassState?: PassState;
+    // Time gate expiration
+    isExpired?: boolean;
 }
 
 export function ImmersiveComposer({
@@ -77,6 +80,7 @@ export function ImmersiveComposer({
     onPostDeleted,
     currentPhase,
     selectedCharacterPassState,
+    isExpired = false,
 }: ImmersiveComposerProps) {
     const { toast } = useToast();
     const { createPost, updatePost, deletePost } = useCampaignStore();
@@ -114,6 +118,22 @@ export function ImmersiveComposer({
             });
         },
         onError: (error) => {
+            // Handle specific error codes
+            if (error instanceof APIError) {
+                if (error.code === "TIME_GATE_EXPIRED") {
+                    toast({
+                        variant: "destructive",
+                        title: "Time gate expired",
+                        description: "The phase has expired. Waiting for GM to transition.",
+                    });
+                    return;
+                }
+                if (error.code === "LOCK_HELD") {
+                    // Don't show toast for lock held - UI handles this
+                    return;
+                }
+            }
+            // Fallback for other errors
             if (!error.message.includes("LOCK_HELD")) {
                 toast({
                     variant: "destructive",
@@ -416,6 +436,27 @@ export function ImmersiveComposer({
                         <span className="text-sm text-muted-foreground">
                             Select a character to post
                         </span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Check if locked by time gate expiration (players only)
+    const isLockedByExpiration = isExpired && !isGM && !isNarrator;
+
+    // Show expired state for players when time gate has expired
+    if (isLockedByExpiration && !hasLock) {
+        return (
+            <div className="fixed bottom-0 left-0 right-0 lg:left-1/4 lg:right-1/4 p-4 z-40">
+                <div className="w-full">
+                    <div className="bg-card rounded-sm px-4 py-3">
+                        <div className="flex items-center justify-center gap-2 text-red-500">
+                            <Lock className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                                Phase expired. Waiting for GM to transition.
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>

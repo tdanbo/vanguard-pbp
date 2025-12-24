@@ -15,6 +15,7 @@ SELECT * FROM scenes WHERE id = $1;
 SELECT
     s.*,
     c.current_phase,
+    c.current_phase_expires_at,
     c.owner_id AS campaign_owner_id
 FROM scenes s
 INNER JOIN campaigns c ON s.campaign_id = c.id
@@ -290,6 +291,12 @@ WHERE s.campaign_id = $1
     s.pass_states->c.id::text IS NULL
     OR s.pass_states->c.id::text = '"none"'
   );
+
+-- name: GetAllActiveScenesInCampaign :many
+-- Returns all non-archived scenes in a campaign for auto-pass processing
+SELECT * FROM scenes
+WHERE campaign_id = $1 AND is_archived = false
+ORDER BY created_at;
 
 -- name: CountPassedCharactersInCampaign :one
 -- Count PCs that have passed in all their scenes

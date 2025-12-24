@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useCampaignStore } from '@/stores/campaignStore'
+import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
@@ -34,9 +35,11 @@ interface CharacterManagerProps {
   members: CampaignMember[]
   scenes?: Scene[]
   characterTypeFilter?: 'pc' | 'npc'
+  playerOwnedOnly?: boolean
 }
 
-export function CharacterManager({ campaignId, isGM, members, scenes = [], characterTypeFilter }: CharacterManagerProps) {
+export function CharacterManager({ campaignId, isGM, members, scenes = [], characterTypeFilter, playerOwnedOnly = false }: CharacterManagerProps) {
+  const { user } = useAuthStore()
   const { toast } = useToast()
   const {
     characters,
@@ -72,6 +75,7 @@ export function CharacterManager({ campaignId, isGM, members, scenes = [], chara
 
   const visibleCharacters = characters.filter((c) => {
     if (characterTypeFilter && c.character_type !== characterTypeFilter) return false
+    if (playerOwnedOnly && c.assigned_user_id !== user?.id) return false
     return showArchived || !c.is_archived
   })
 
@@ -336,7 +340,7 @@ export function CharacterManager({ campaignId, isGM, members, scenes = [], chara
                 <SelectContent>
                   {playerMembers.map((member) => (
                     <SelectItem key={member.user_id} value={member.user_id}>
-                      Player {member.user_id.slice(0, 8)}...
+                      {member.alias || `Player ${member.user_id.slice(0, 8)}...`}
                     </SelectItem>
                   ))}
                 </SelectContent>

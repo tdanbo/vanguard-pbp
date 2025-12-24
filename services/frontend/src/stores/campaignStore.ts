@@ -70,7 +70,7 @@ interface CampaignState {
   fetchInvites: (campaignId: string) => Promise<void>
   createInvite: (campaignId: string) => Promise<InviteLink>
   revokeInvite: (campaignId: string, inviteId: string) => Promise<void>
-  joinCampaign: (code: string) => Promise<Campaign>
+  joinCampaign: (code: string, alias?: string) => Promise<Campaign>
   validateInvite: (code: string) => Promise<{ campaignId: string; campaignTitle: string }>
 
   // Characters
@@ -363,12 +363,12 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     }
   },
 
-  joinCampaign: async (code: string) => {
+  joinCampaign: async (code: string, alias?: string) => {
     set({ loadingCampaigns: true, error: null })
     try {
       const campaign = await api<Campaign>('/api/v1/campaigns/join', {
         method: 'POST',
-        body: { code },
+        body: { code, alias },
       })
       set((state) => ({
         campaigns: [campaign, ...state.campaigns],
@@ -816,10 +816,10 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   fetchScenePassStates: async (campaignId: string, sceneId: string) => {
     set({ loadingPass: true, error: null })
     try {
-      const scenePassStates = await api<Record<string, PassState>>(
+      const response = await api<{ passStates: Record<string, PassState> }>(
         `/api/v1/campaigns/${campaignId}/scenes/${sceneId}/pass`
       )
-      set({ scenePassStates, loadingPass: false })
+      set({ scenePassStates: response.passStates, loadingPass: false })
     } catch (error) {
       set({ error: (error as Error).message, loadingPass: false })
       throw error

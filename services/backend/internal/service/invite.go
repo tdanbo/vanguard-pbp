@@ -117,6 +117,7 @@ func (s *InviteService) UseInviteCode(
 	ctx context.Context,
 	code string,
 	userID pgtype.UUID,
+	alias string,
 ) (*generated.Campaign, error) {
 	// Validate the invite
 	invite, err := s.ValidateInviteCode(ctx, code)
@@ -163,11 +164,16 @@ func (s *InviteService) UseInviteCode(
 		return nil, err
 	}
 
-	// Add user as player member
+	// Add user as player member with optional alias
+	var aliasPg pgtype.Text
+	if alias != "" {
+		aliasPg = pgtype.Text{String: alias, Valid: true}
+	}
 	_, err = qtx.AddCampaignMember(ctx, generated.AddCampaignMemberParams{
 		CampaignID: invite.CampaignID,
 		UserID:     userID,
 		Role:       generated.MemberRolePlayer,
+		Alias:      aliasPg,
 	})
 	if err != nil {
 		return nil, err

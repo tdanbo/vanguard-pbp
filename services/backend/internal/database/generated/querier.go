@@ -6,6 +6,7 @@ package generated
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -73,11 +74,13 @@ type Querier interface {
 	FindSimilarNotification(ctx context.Context, arg FindSimilarNotificationParams) (Notification, error)
 	// Returns all non-archived characters in active scenes for a campaign
 	GetActiveCharactersInCampaign(ctx context.Context, campaignID pgtype.UUID) ([]GetActiveCharactersInCampaignRow, error)
+	// Returns all non-archived scenes in a campaign for auto-pass processing
+	GetAllActiveScenesInCampaign(ctx context.Context, campaignID pgtype.UUID) ([]Scene, error)
 	GetAllPassStatesInCampaign(ctx context.Context, campaignID pgtype.UUID) ([]GetAllPassStatesInCampaignRow, error)
 	GetCampaign(ctx context.Context, id pgtype.UUID) (Campaign, error)
 	GetCampaignMember(ctx context.Context, arg GetCampaignMemberParams) (CampaignMember, error)
 	GetCampaignMemberCount(ctx context.Context, campaignID pgtype.UUID) (int64, error)
-	GetCampaignMembers(ctx context.Context, campaignID pgtype.UUID) ([]CampaignMember, error)
+	GetCampaignMembers(ctx context.Context, campaignID pgtype.UUID) ([]GetCampaignMembersRow, error)
 	// ============================================
 	// PHASE MANAGEMENT QUERIES
 	// ============================================
@@ -144,7 +147,7 @@ type Querier interface {
 	// ============================================
 	// PASS SYSTEM QUERIES
 	// ============================================
-	GetScenePassStates(ctx context.Context, id pgtype.UUID) ([]byte, error)
+	GetScenePassStates(ctx context.Context, id pgtype.UUID) (json.RawMessage, error)
 	GetScenePostCount(ctx context.Context, sceneID pgtype.UUID) (int64, error)
 	GetSceneWithCampaign(ctx context.Context, id pgtype.UUID) (GetSceneWithCampaignRow, error)
 	GetSceneWithCharacter(ctx context.Context, arg GetSceneWithCharacterParams) (Scene, error)

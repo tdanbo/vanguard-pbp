@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -122,6 +123,14 @@ func (s *PostService) CreatePost(
 	// Verify phase (players can only post during PC Phase)
 	if !isGM && sceneWithCampaign.CurrentPhase != generated.CampaignPhasePcPhase {
 		return nil, ErrNotInPCPhase
+	}
+
+	// Check if time gate has expired (players cannot post when expired)
+	if !isGM && sceneWithCampaign.CurrentPhase == generated.CampaignPhasePcPhase {
+		if sceneWithCampaign.CurrentPhaseExpiresAt.Valid &&
+			time.Now().After(sceneWithCampaign.CurrentPhaseExpiresAt.Time) {
+			return nil, ErrTimeGateExpired
+		}
 	}
 
 	// Handle character validation

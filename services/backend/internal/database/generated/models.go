@@ -6,6 +6,7 @@ package generated
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -559,6 +560,8 @@ type CampaignMember struct {
 	UserID     pgtype.UUID        `json:"user_id"`
 	Role       MemberRole         `json:"role"`
 	JoinedAt   pgtype.Timestamptz `json:"joined_at"`
+	// Out-of-character alias for the player, can be different from character names
+	Alias pgtype.Text `json:"alias"`
 }
 
 type Character struct {
@@ -758,7 +761,7 @@ type Scene struct {
 	Description    pgtype.Text        `json:"description"`
 	HeaderImageUrl pgtype.Text        `json:"header_image_url"`
 	CharacterIds   []pgtype.UUID      `json:"character_ids"`
-	PassStates     []byte             `json:"pass_states"`
+	PassStates     json.RawMessage    `json:"pass_states"`
 	IsArchived     bool               `json:"is_archived"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`

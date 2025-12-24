@@ -2,17 +2,17 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
-interface ThreeColumnSceneLayoutProps {
+interface ThreeColumnLayoutProps {
   children: React.ReactNode
-  leftSidebar: React.ReactNode
-  rightSidebar: React.ReactNode
+  leftSidebar?: React.ReactNode
+  rightSidebar?: React.ReactNode
   backgroundImage?: string | null
   onBack?: () => void
   backLabel?: string
   menuContent?: React.ReactNode
 }
 
-export function ThreeColumnSceneLayout({
+export function ThreeColumnLayout({
   children,
   leftSidebar,
   rightSidebar,
@@ -20,7 +20,7 @@ export function ThreeColumnSceneLayout({
   onBack,
   backLabel = 'Back',
   menuContent,
-}: ThreeColumnSceneLayoutProps) {
+}: ThreeColumnLayoutProps) {
   const navigate = useNavigate()
 
   const handleBack = onBack || (() => navigate(-1))
@@ -64,10 +64,10 @@ export function ThreeColumnSceneLayout({
                 />
               </div>
               {/* Gradient overlays for readability */}
-              {/* Top vignette for header text */}
-              <div className="absolute inset-0 z-[1] bg-gradient-to-b from-background/70 via-transparent via-30% to-transparent pointer-events-none" />
-              {/* Bottom fade into background */}
-              <div className="absolute inset-0 z-[1] bg-gradient-to-b from-transparent via-background/50 via-40% to-background pointer-events-none" />
+               {/* Top vignette for header text */}
+               <div className="absolute inset-0 z-[1] bg-gradient-to-b from-background/80 via-background/20 via-50% to-transparent pointer-events-none" />
+               {/* Bottom fade into background */}
+               <div className="absolute inset-0 z-[1] bg-gradient-to-b from-transparent via-background/30 via-60% to-background pointer-events-none" />
             </>
           )}
 
@@ -88,3 +88,6 @@ export function ThreeColumnSceneLayout({
     </div>
   )
 }
+
+// Alias for backwards compatibility
+export const ThreeColumnSceneLayout = ThreeColumnLayout

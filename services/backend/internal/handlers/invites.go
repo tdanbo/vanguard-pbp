@@ -12,7 +12,8 @@ import (
 
 // JoinCampaignRequest represents the request to join a campaign via invite code.
 type JoinCampaignRequest struct {
-	Code string `binding:"required" json:"code"`
+	Code  string `binding:"required" json:"code"`
+	Alias string `binding:"omitempty,max=255" json:"alias"`
 }
 
 // RevokeInviteRequest represents the request to revoke an invite.
@@ -159,7 +160,7 @@ func JoinCampaign(db *database.DB) gin.HandlerFunc {
 		userID := parseUUID(userIDStr)
 		svc := service.NewInviteService(db.Pool)
 
-		campaign, err := svc.UseInviteCode(c.Request.Context(), req.Code, userID)
+		campaign, err := svc.UseInviteCode(c.Request.Context(), req.Code, userID, req.Alias)
 		if err != nil {
 			handleServiceError(c, err)
 			return

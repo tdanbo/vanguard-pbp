@@ -28,6 +28,7 @@ import { UserPlus, Loader2 } from 'lucide-react'
 
 const joinCampaignSchema = z.object({
   code: z.string().min(1, 'Invite code is required'),
+  alias: z.string().optional(),
 })
 
 type JoinCampaignFormValues = z.infer<typeof joinCampaignSchema>
@@ -42,12 +43,13 @@ export function JoinCampaignDialog() {
     resolver: zodResolver(joinCampaignSchema),
     defaultValues: {
       code: '',
+      alias: '',
     },
   })
 
   async function onSubmit(values: JoinCampaignFormValues) {
     try {
-      const campaign = await joinCampaign(values.code)
+      const campaign = await joinCampaign(values.code, values.alias || undefined)
       toast({
         title: 'Joined campaign',
         description: `You've joined "${campaign.title}".`,
@@ -89,6 +91,22 @@ export function JoinCampaignDialog() {
                     <Input placeholder="Enter invite code" {...field} />
                   </FormControl>
                   <FormDescription>The code from your invite link.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="alias"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>OOC Alias</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter an out-of-character alias" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    This is not your character name but an out-of-character alias. You can change it later.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

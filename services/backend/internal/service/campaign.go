@@ -305,7 +305,7 @@ func (s *CampaignService) ResumeCampaign(
 func (s *CampaignService) GetCampaignMembers(
 	ctx context.Context,
 	campaignID, userID pgtype.UUID,
-) ([]generated.CampaignMember, error) {
+) ([]generated.GetCampaignMembersRow, error) {
 	// Verify user is a member
 	isMember, err := s.queries.IsCampaignMember(ctx, generated.IsCampaignMemberParams{
 		CampaignID: campaignID,
@@ -319,6 +319,17 @@ func (s *CampaignService) GetCampaignMembers(
 	}
 
 	return s.queries.GetCampaignMembers(ctx, campaignID)
+}
+
+// IsUserGM checks if a user is a GM of a campaign.
+func (s *CampaignService) IsUserGM(
+	ctx context.Context,
+	campaignID, userID pgtype.UUID,
+) (bool, error) {
+	return s.queries.IsUserGM(ctx, generated.IsUserGMParams{
+		CampaignID: campaignID,
+		UserID:     userID,
+	})
 }
 
 // Helper functions

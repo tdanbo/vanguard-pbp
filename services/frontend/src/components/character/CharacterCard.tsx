@@ -77,13 +77,14 @@ export function CharacterCard({
   const gradient = getGradient(character.display_name)
 
   return (
-    <Card
-      className={cn(
-        "overflow-hidden",
+    <Card className={cn(
+      "bg-card/50 rounded-sm overflow-hidden p-1",
+      className
+    )}>
+      <div className={cn(
+        "bg-card rounded-sm overflow-hidden",
         isArchived ? "opacity-60" : "card-interactive",
-        className
-      )}
-    >
+      )}>
       {/* Portrait header - compact square aspect ratio */}
       <div className="aspect-square relative">
         {character.avatar_url ? (
@@ -206,12 +207,13 @@ export function CharacterCard({
             </span>
           </div>
         )}
-      </CardContent>
-    </Card>
-  )
-}
+        </CardContent>
+        </div>
+        </Card>
+        )
+        }
 
-interface CharacterCardsGridProps {
+        interface CharacterCardsGridProps {
   characters: Character[]
   isGM: boolean
   members: CampaignMember[]

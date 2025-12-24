@@ -117,8 +117,8 @@ export function CharacterAssignmentWidget({
     return filtered
   }, [availableCharacters, filterType, searchQuery])
 
-  // Early return AFTER all hooks
-  if (!isGM || !isGMPhase || isPaused) return null
+  // Early return AFTER all hooks (skip for controlled mode)
+  if (!isControlled && (!isGM || !isGMPhase || isPaused)) return null
 
   // Toggle character assignment
   const handleToggle = async (character: Character) => {
@@ -297,7 +297,11 @@ function CharacterAssignmentItem({
         'w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors text-left cursor-pointer',
         isProcessing && 'opacity-50 pointer-events-none'
       )}
-      onClick={onToggle}
+      onClick={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        onToggle()
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()

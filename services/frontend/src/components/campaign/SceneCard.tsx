@@ -1,11 +1,15 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { NewBadge } from "@/components/ui/game-badges"
 import { Badge } from "@/components/ui/badge"
-import { MessageSquare, Archive, Users } from "lucide-react"
+import { MessageSquare, Archive } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { CharacterAssignmentWidget } from "@/components/scene/CharacterAssignmentWidget"
-import type { CampaignPhase } from "@/types"
+import { CharacterBubble } from "@/components/character/CharacterBubble"
+import { AddBubble } from "@/components/character/AddBubble"
+import { useCampaignStore } from "@/stores/campaignStore"
+import { useEffect, useState } from "react"
+import type { CampaignPhase, PassState, Character } from "@/types"
 
 interface SceneCardProps {
   scene: {
@@ -15,6 +19,7 @@ interface SceneCardProps {
     header_image_url?: string | null
     post_count?: number
     character_ids: string[]
+    pass_states?: Record<string, PassState>
     is_archived?: boolean
   }
   campaignId: string
@@ -29,7 +34,8 @@ interface SceneCardProps {
  * Features:
  * - Header image or gradient fallback
  * - Scene title with font-display
- * - Post count and character count
+ * - Character portraits with pass state indicators
+ * - Post count
  * - NEW badge for unread content
  * - Interactive hover effect (lift + gold border)
  */
@@ -42,23 +48,39 @@ export function SceneCard({
   phase,
 }: SceneCardProps) {
   const navigate = useNavigate()
+  const { characters } = useCampaignStore()
+  const [sceneCharacters, setSceneCharacters] = useState<Character[]>([])
+  const [assignmentWidgetOpen, setAssignmentWidgetOpen] = useState(false)
   const isArchived = scene.is_archived
 
+  useEffect(() => {
+    // Get character data for this scene's character IDs
+    const chars = scene.character_ids
+      .map(id => characters.find(c => c.id === id))
+      .filter(Boolean) as Character[]
+    setSceneCharacters(chars)
+  }, [scene.character_ids, characters])
+
+  // Filter to only PCs for the party display
+  const pcCharacters = sceneCharacters.filter(c => c.character_type === 'pc')
+
   return (
-    <Card
-      className={cn(
-        "overflow-hidden",
+    <Card className={cn(
+      "bg-card/50 rounded-sm overflow-hidden p-1",
+      className
+    )}>
+      <div className={cn(
+        "bg-card rounded-sm overflow-hidden flex flex-col h-full",
         isArchived
           ? "opacity-60 cursor-default"
           : "card-interactive cursor-pointer",
-        className
       )}
       onClick={
         isArchived
           ? undefined
           : () => navigate(`/campaigns/${campaignId}/scenes/${scene.id}`)
       }
-    >
+      >
       {/* Image or gradient header */}
       <div className="aspect-video relative">
         {scene.header_image_url ? (
@@ -92,16 +114,56 @@ export function SceneCard({
         </div>
       </div>
 
-      {/* Content */}
-      <CardContent className="p-4">
-        <h3 className="font-display text-lg font-semibold mb-1 line-clamp-1">
-          {scene.title}
-        </h3>
-        {scene.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-            {scene.description}
-          </p>
+      {/* Content - Flex layout with fixed footer */}
+      <CardContent className="p-4 flex flex-col h-full">
+        {/* Top section - flexible height */}
+        <div className="flex-1 min-h-0">
+          <h3 className="font-display text-lg font-semibold mb-1 line-clamp-1">
+            {scene.title}
+          </h3>
+          {scene.description && (
+            <p className="text-sm text-muted-foreground line-clamp-2">
+              {scene.description}
+            </p>
+          )}
+        </div>
+
+        {/* Character Portraits with Pass State (PC Phase) */}
+        {phase === 'pc_phase' && pcCharacters.length > 0 && (
+          <div className="my-3 py-3 border-t border-b">
+            <div className="flex items-center gap-2 flex-wrap">
+              {pcCharacters.map(char => {
+                const passState = scene.pass_states?.[char.id] ?? 'none'
+
+                return (
+                  <CharacterBubble
+                    key={char.id}
+                    character={{
+                      id: char.id,
+                      displayName: char.display_name,
+                      avatarUrl: char.avatar_url,
+                      passState: passState,
+                    }}
+                    size="sm"
+                    showName={false}
+                  />
+                )
+              })}
+              {isGM && (
+                <AddBubble
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setAssignmentWidgetOpen(true)
+                  }}
+                  label="Add character"
+                  size="sm"
+                />
+              )}
+            </div>
+          </div>
         )}
+
+        {/* Bottom section - fixed position */}
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <MessageSquare className="h-4 w-4" />
@@ -110,16 +172,22 @@ export function SceneCard({
               {(scene.post_count ?? 0) === 1 ? "post" : "posts"}
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Users className="h-4 w-4" />
-            <span>
-              {scene.character_ids.length}{" "}
-              {scene.character_ids.length === 1 ? "character" : "characters"}
-            </span>
-          </div>
         </div>
       </CardContent>
-    </Card>
+    </div>
+
+    {/* Character assignment modal (controlled) */}
+    {isGM && (
+      <CharacterAssignmentWidget
+        campaignId={campaignId}
+        sceneId={scene.id}
+        sceneCharacterIds={scene.character_ids}
+        open={assignmentWidgetOpen}
+        onOpenChange={setAssignmentWidgetOpen}
+        hideTrigger={true}
+      />
+    )}
+  </Card>
   )
 }
 

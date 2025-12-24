@@ -102,16 +102,24 @@ export function PassBadge({ state, size = "sm" }: PassBadgeProps) {
 
 interface PassCheckmarkProps {
   state: PassState
+  size?: "sm" | "md" | "lg"
 }
 
-export function PassCheckmark({ state }: PassCheckmarkProps) {
+const checkmarkSizes = {
+  sm: { container: "w-4 h-4", icon: "h-2.5 w-2.5" },
+  md: { container: "w-5 h-5", icon: "h-3 w-3" },
+  lg: { container: "w-5 h-5", icon: "h-3 w-3" },
+}
+
+export function PassCheckmark({ state, size = "lg" }: PassCheckmarkProps) {
   if (state === "none") return null
 
   const Icon = state === "hard_passed" ? CheckCheck : Check
+  const sizeConfig = checkmarkSizes[size]
 
   return (
-    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-      <Icon className="h-3 w-3 text-white" />
+    <div className={cn(sizeConfig.container, "rounded-full bg-green-500 flex items-center justify-center")}>
+      <Icon className={cn(sizeConfig.icon, "text-white")} />
     </div>
   )
 }

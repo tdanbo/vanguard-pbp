@@ -7,6 +7,7 @@ package generated
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -328,6 +329,44 @@ func (q *Queries) GetActiveCharactersInCampaign(ctx context.Context, campaignID 
 	return items, nil
 }
 
+const getAllActiveScenesInCampaign = `-- name: GetAllActiveScenesInCampaign :many
+SELECT id, campaign_id, title, description, header_image_url, character_ids, pass_states, is_archived, created_at, updated_at FROM scenes
+WHERE campaign_id = $1 AND is_archived = false
+ORDER BY created_at
+`
+
+// Returns all non-archived scenes in a campaign for auto-pass processing
+func (q *Queries) GetAllActiveScenesInCampaign(ctx context.Context, campaignID pgtype.UUID) ([]Scene, error) {
+	rows, err := q.db.Query(ctx, getAllActiveScenesInCampaign, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Scene
+	for rows.Next() {
+		var i Scene
+		if err := rows.Scan(
+			&i.ID,
+			&i.CampaignID,
+			&i.Title,
+			&i.Description,
+			&i.HeaderImageUrl,
+			&i.CharacterIds,
+			&i.PassStates,
+			&i.IsArchived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllPassStatesInCampaign = `-- name: GetAllPassStatesInCampaign :many
 SELECT
     s.id AS scene_id,
@@ -341,10 +380,10 @@ ORDER BY s.created_at
 `
 
 type GetAllPassStatesInCampaignRow struct {
-	SceneID      pgtype.UUID   `json:"scene_id"`
-	SceneTitle   string        `json:"scene_title"`
-	PassStates   []byte        `json:"pass_states"`
-	CharacterIds []pgtype.UUID `json:"character_ids"`
+	SceneID      pgtype.UUID     `json:"scene_id"`
+	SceneTitle   string          `json:"scene_title"`
+	PassStates   json.RawMessage `json:"pass_states"`
+	CharacterIds []pgtype.UUID   `json:"character_ids"`
 }
 
 func (q *Queries) GetAllPassStatesInCampaign(ctx context.Context, campaignID pgtype.UUID) ([]GetAllPassStatesInCampaignRow, error) {
@@ -556,9 +595,9 @@ SELECT pass_states FROM scenes WHERE id = $1
 // ============================================
 // PASS SYSTEM QUERIES
 // ============================================
-func (q *Queries) GetScenePassStates(ctx context.Context, id pgtype.UUID) ([]byte, error) {
+func (q *Queries) GetScenePassStates(ctx context.Context, id pgtype.UUID) (json.RawMessage, error) {
 	row := q.db.QueryRow(ctx, getScenePassStates, id)
-	var pass_states []byte
+	var pass_states json.RawMessage
 	err := row.Scan(&pass_states)
 	return pass_states, err
 }
@@ -567,6 +606,7 @@ const getSceneWithCampaign = `-- name: GetSceneWithCampaign :one
 SELECT
     s.id, s.campaign_id, s.title, s.description, s.header_image_url, s.character_ids, s.pass_states, s.is_archived, s.created_at, s.updated_at,
     c.current_phase,
+    c.current_phase_expires_at,
     c.owner_id AS campaign_owner_id
 FROM scenes s
 INNER JOIN campaigns c ON s.campaign_id = c.id
@@ -574,18 +614,19 @@ WHERE s.id = $1
 `
 
 type GetSceneWithCampaignRow struct {
-	ID              pgtype.UUID        `json:"id"`
-	CampaignID      pgtype.UUID        `json:"campaign_id"`
-	Title           string             `json:"title"`
-	Description     pgtype.Text        `json:"description"`
-	HeaderImageUrl  pgtype.Text        `json:"header_image_url"`
-	CharacterIds    []pgtype.UUID      `json:"character_ids"`
-	PassStates      []byte             `json:"pass_states"`
-	IsArchived      bool               `json:"is_archived"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	CurrentPhase    CampaignPhase      `json:"current_phase"`
-	CampaignOwnerID pgtype.UUID        `json:"campaign_owner_id"`
+	ID                    pgtype.UUID        `json:"id"`
+	CampaignID            pgtype.UUID        `json:"campaign_id"`
+	Title                 string             `json:"title"`
+	Description           pgtype.Text        `json:"description"`
+	HeaderImageUrl        pgtype.Text        `json:"header_image_url"`
+	CharacterIds          []pgtype.UUID      `json:"character_ids"`
+	PassStates            json.RawMessage    `json:"pass_states"`
+	IsArchived            bool               `json:"is_archived"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	CurrentPhase          CampaignPhase      `json:"current_phase"`
+	CurrentPhaseExpiresAt pgtype.Timestamptz `json:"current_phase_expires_at"`
+	CampaignOwnerID       pgtype.UUID        `json:"campaign_owner_id"`
 }
 
 func (q *Queries) GetSceneWithCampaign(ctx context.Context, id pgtype.UUID) (GetSceneWithCampaignRow, error) {
@@ -603,6 +644,7 @@ func (q *Queries) GetSceneWithCampaign(ctx context.Context, id pgtype.UUID) (Get
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentPhase,
+		&i.CurrentPhaseExpiresAt,
 		&i.CampaignOwnerID,
 	)
 	return i, err
@@ -1028,8 +1070,8 @@ RETURNING id, campaign_id, title, description, header_image_url, character_ids, 
 `
 
 type UpdateScenePassStatesParams struct {
-	ID         pgtype.UUID `json:"id"`
-	PassStates []byte      `json:"pass_states"`
+	ID         pgtype.UUID     `json:"id"`
+	PassStates json.RawMessage `json:"pass_states"`
 }
 
 func (q *Queries) UpdateScenePassStates(ctx context.Context, arg UpdateScenePassStatesParams) (Scene, error) {

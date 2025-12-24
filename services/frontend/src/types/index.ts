@@ -51,6 +51,8 @@ export interface CampaignMember {
   campaign_id: string
   user_id: string
   role: MemberRole
+  alias?: string
+  email?: string
   joined_at: string
 }
 
@@ -261,6 +263,7 @@ export interface PhaseStatus {
   startedAt: string | null
   expiresAt: string | null
   isPaused: boolean
+  isExpired: boolean
   timeGatePreset: string | null
   passedCount: number
   totalCount: number

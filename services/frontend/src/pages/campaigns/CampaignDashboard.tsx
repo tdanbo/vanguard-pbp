@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useCampaignStore } from '@/stores/campaignStore'
+import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -44,14 +45,11 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { PlusCircle, Eye, EyeOff } from 'lucide-react'
-import { ManagementLayout } from '@/components/layout'
-import { CampaignHeader, SceneCardsGrid } from '@/components/campaign'
+import { ThreeColumnLayout } from '@/components/layout'
+import { SceneCardsGrid } from '@/components/campaign'
 import { CharacterManager } from '@/components/character/CharacterManager'
 import { EmptyState } from '@/components/ui/empty-state'
-import {
-  PhaseBar,
-  CampaignPassOverview,
-} from '@/components/phase'
+import { UnifiedHeader } from '@/components/phase/UnifiedHeader'
 
 export default function CampaignDashboard() {
   const { id } = useParams<{ id: string }>()
@@ -62,12 +60,14 @@ export default function CampaignDashboard() {
     members,
     invites,
     scenes,
+    characters,
     phaseStatus,
     loadingCampaign,
     fetchCampaign,
     fetchMembers,
     fetchInvites,
     fetchScenes,
+    fetchCharacters,
     fetchPhaseStatus,
     transitionPhase,
     createInvite,
@@ -76,6 +76,7 @@ export default function CampaignDashboard() {
     leaveCampaign,
     createScene,
   } = useCampaignStore()
+  const { user } = useAuthStore()
 
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
 
@@ -85,29 +86,39 @@ export default function CampaignDashboard() {
   const [sceneTitle, setSceneTitle] = useState('')
   const [sceneDescription, setSceneDescription] = useState('')
 
+  // Get user's assigned characters (for players) - must be before early return
+  const userCharacters = useMemo(() => {
+    const isGM = currentCampaign?.user_role === 'gm'
+    if (isGM || !user) return []
+    return characters.filter((c) => c.character_type === 'pc' && c.assigned_user_id === user.id)
+  }, [currentCampaign?.user_role, user, characters])
+
   useEffect(() => {
     if (id) {
       fetchCampaign(id)
       fetchMembers(id)
+      fetchCharacters(id)
       fetchScenes(id)
       fetchPhaseStatus(id)
       fetchInvites(id).catch(() => {
         // Non-GMs can't fetch invites, that's ok
       })
     }
-  }, [id, fetchCampaign, fetchMembers, fetchScenes, fetchInvites, fetchPhaseStatus])
+  }, [id, fetchCampaign, fetchMembers, fetchCharacters, fetchScenes, fetchInvites, fetchPhaseStatus])
 
   if (loadingCampaign || !currentCampaign) {
     return (
-      <ManagementLayout maxWidth="6xl">
-        <Skeleton className="mb-4 h-8 w-32" />
-        <Skeleton className="mb-2 h-10 w-3/4" />
-        <Skeleton className="mb-4 h-6 w-1/2" />
-        <div className="mt-8 space-y-4">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-64 w-full" />
+      <ThreeColumnLayout>
+        <div className="px-4 md:px-6 lg:px-8 pt-16">
+          <Skeleton className="mb-4 h-8 w-32" />
+          <Skeleton className="mb-2 h-10 w-3/4" />
+          <Skeleton className="mb-4 h-6 w-1/2" />
+          <div className="mt-8 space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-64 w-full" />
+          </div>
         </div>
-      </ManagementLayout>
+      </ThreeColumnLayout>
     )
   }
 
@@ -210,63 +221,61 @@ export default function CampaignDashboard() {
   const activeSceneCount = scenes.filter((s) => !s.is_archived).length
 
   return (
-    <ManagementLayout maxWidth="6xl">
-      {/* Campaign Header */}
-      <CampaignHeader
-        campaign={currentCampaign}
-        memberCount={members.length}
-        isGM={isGM}
-      />
-
-      {/* GM Actions */}
-      {isGM && (
-        <div className="flex flex-wrap gap-2 mb-6">
-          <Button variant="outline" size="sm" asChild>
+    <ThreeColumnLayout
+      onBack={() => navigate('/')}
+      backLabel="Back to Campaigns"
+      menuContent={
+        isGM && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full bg-background/40 backdrop-blur-md border border-border/30"
+            asChild
+          >
             <Link to={`/campaigns/${id}/settings`}>
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
+              <Settings className="h-5 w-5" />
             </Link>
           </Button>
-        </div>
-      )}
-
-      {/* Phase Status */}
-      <PhaseBar
-        currentPhase={currentCampaign.current_phase}
-        phaseStartedAt={currentCampaign.current_phase_started_at || null}
-        expiresAt={currentCampaign.current_phase_expires_at || null}
-        isGM={isGM}
-        canTransition={phaseStatus?.canTransition ?? false}
-        transitionBlock={phaseStatus?.transitionBlock}
-        isPaused={isPaused}
-        onTransitionPhase={(toPhase) => {
-          transitionPhase(currentCampaign.id, toPhase)
-            .then(() => {
-              toast({ title: `Transitioned to ${toPhase === 'gm_phase' ? 'GM' : 'PC'} Phase` })
-              fetchPhaseStatus(currentCampaign.id)
-            })
-            .catch((error: Error) => {
-              toast({
-                variant: 'destructive',
-                title: 'Failed to transition phase',
-                description: error.message,
+        )
+      }
+    >
+      <div className="px-4 md:px-6 lg:px-8 pt-16">
+        {/* Unified Header with phase info */}
+        <UnifiedHeader
+          title={currentCampaign.title}
+          description={currentCampaign.description}
+          currentPhase={currentCampaign.current_phase}
+          phaseStartedAt={currentCampaign.current_phase_started_at || null}
+          expiresAt={currentCampaign.current_phase_expires_at || null}
+          isPaused={isPaused}
+          playersRemaining={
+            phaseStatus
+              ? phaseStatus.totalCount - phaseStatus.passedCount
+              : 0
+          }
+          totalPlayers={phaseStatus?.totalCount || 0}
+          isGM={isGM}
+          canTransition={phaseStatus?.canTransition ?? false}
+          transitionBlock={phaseStatus?.transitionBlock}
+          onTransitionPhase={(toPhase) => {
+            transitionPhase(currentCampaign.id, toPhase)
+              .then(() => {
+                toast({ title: `Transitioned to ${toPhase === 'gm_phase' ? 'GM' : 'PC'} Phase` })
+                fetchPhaseStatus(currentCampaign.id)
               })
-            })
-        }}
-        className="mb-6"
-      />
-
-      {/* Pass Overview (PC Phase only) */}
-      {currentCampaign.current_phase === 'pc_phase' && (
-        <CampaignPassOverview
-          campaignId={currentCampaign.id}
-          isPCPhase={currentCampaign.current_phase === 'pc_phase'}
-          className="mb-6"
+              .catch((error: Error) => {
+                toast({
+                  variant: 'destructive',
+                  title: 'Failed to transition phase',
+                  description: error.message,
+                })
+              })
+          }}
+          className="mb-8"
         />
-      )}
 
-      {/* Tabs with gold underline */}
-      <Tabs defaultValue="scenes" className="space-y-6">
+        {/* Tabs with gold underline */}
+        <Tabs defaultValue={isGM ? "scenes" : "pcs"} className="space-y-6">
         <TabsList variant="underline">
           <TabsTrigger value="scenes" variant="underline">
             <BookOpen className="mr-2 h-4 w-4" />
@@ -274,21 +283,23 @@ export default function CampaignDashboard() {
           </TabsTrigger>
           <TabsTrigger value="pcs" variant="underline">
             <User className="mr-2 h-4 w-4" />
-            PCs
-          </TabsTrigger>
-          <TabsTrigger value="npcs" variant="underline">
-            <Users className="mr-2 h-4 w-4" />
-            NPCs
-          </TabsTrigger>
-          <TabsTrigger value="members" variant="underline">
-            <Users className="mr-2 h-4 w-4" />
-            Members ({members.length})
+            {isGM ? "PCs" : "My Characters"}
           </TabsTrigger>
           {isGM && (
-            <TabsTrigger value="invites" variant="underline">
-              <LinkIcon className="mr-2 h-4 w-4" />
-              Invites ({activeInvites.length})
-            </TabsTrigger>
+            <>
+              <TabsTrigger value="npcs" variant="underline">
+                <Users className="mr-2 h-4 w-4" />
+                NPCs
+              </TabsTrigger>
+              <TabsTrigger value="members" variant="underline">
+                <Users className="mr-2 h-4 w-4" />
+                Members ({members.length})
+              </TabsTrigger>
+              <TabsTrigger value="invites" variant="underline">
+                <LinkIcon className="mr-2 h-4 w-4" />
+                Invites ({activeInvites.length})
+              </TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -387,13 +398,22 @@ export default function CampaignDashboard() {
           </TabsContent>
 
           <TabsContent value="pcs">
-            <CharacterManager
-              campaignId={currentCampaign.id}
-              isGM={isGM}
-              members={members}
-              scenes={scenes}
-              characterTypeFilter="pc"
-            />
+            {!isGM && userCharacters.length === 0 ? (
+              <EmptyState
+                icon={User}
+                title="No characters assigned"
+                description="You don't have any characters assigned to this campaign yet. Contact the Game Master to get a character."
+              />
+            ) : (
+              <CharacterManager
+                campaignId={currentCampaign.id}
+                isGM={isGM}
+                members={members}
+                scenes={scenes}
+                characterTypeFilter="pc"
+                playerOwnedOnly={!isGM}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="npcs">
@@ -486,10 +506,11 @@ export default function CampaignDashboard() {
             <AlertDialogAction onClick={handleLeave}>Leave Campaign</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
-    </ManagementLayout>
-  )
-}
+        </AlertDialog>
+        </div>
+        </ThreeColumnLayout>
+        )
+        }
 
 function MemberRow({
   member,
@@ -507,11 +528,11 @@ function MemberRow({
 
   return (
     <div className="flex items-center justify-between rounded-md border p-3">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-1">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm">
           {isGM ? <Crown className="h-4 w-4" /> : <Users className="h-4 w-4" />}
         </div>
-        <div>
+        <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">
               {isGM ? 'Game Master' : 'Player'}
@@ -520,8 +541,16 @@ function MemberRow({
               {member.role.toUpperCase()}
             </Badge>
           </div>
-          <div className="text-xs text-muted-foreground">
-            Joined {formatDistanceToNow(new Date(member.joined_at), { addSuffix: true })}
+          <div className="text-xs text-muted-foreground space-y-1">
+            {member.alias && (
+              <div>Alias: {member.alias}</div>
+            )}
+            {isCurrentUserGM && member.email && (
+              <div>{member.email}</div>
+            )}
+            <div>
+              Joined {formatDistanceToNow(new Date(member.joined_at), { addSuffix: true })}
+            </div>
           </div>
         </div>
       </div>
