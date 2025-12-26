@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -136,6 +137,8 @@ func SubmitPost(db *database.DB) gin.HandlerFunc {
 }
 
 // UpdatePost updates a post.
+//
+//nolint:dupl // Handler structure is similar but services different endpoint
 func UpdatePost(db *database.DB) gin.HandlerFunc {
 	svc := service.NewPostService(db.Pool)
 	queries := generated.New(db.Pool)
@@ -323,6 +326,50 @@ func UnhidePost(db *database.DB) gin.HandlerFunc {
 	}
 }
 
+// UpdatePostWitnesses updates the witnesses on a post (GM only).
+//
+//nolint:dupl // Handler structure is similar but services different endpoint
+func UpdatePostWitnesses(db *database.DB) gin.HandlerFunc {
+	svc := service.NewPostService(db.Pool)
+	queries := generated.New(db.Pool)
+
+	return func(c *gin.Context) {
+		userIDStr, ok := middleware.GetUserID(c)
+		if !ok {
+			models.UnauthorizedError(c)
+			return
+		}
+
+		postIDParam := c.Param("postId")
+		if postIDParam == "" {
+			models.ValidationError(c, "Post ID is required")
+			return
+		}
+
+		var req service.UpdatePostWitnessesRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			models.ValidationError(c, "Invalid request body")
+			return
+		}
+
+		userID := parseUUID(userIDStr)
+		resp, err := svc.UpdatePostWitnesses(c.Request.Context(), userID, postIDParam, req)
+		if err != nil {
+			handlePostError(c, err)
+			return
+		}
+
+		// Broadcast post updated (witnesses changed)
+		sceneID := parseUUID(resp.SceneID)
+		postID := parseUUID(resp.ID)
+		if scene, sErr := queries.GetScene(c.Request.Context(), sceneID); sErr == nil {
+			BroadcastPostUpdated(c, postID, sceneID, scene.CampaignID)
+		}
+
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
 // ListHiddenPosts lists all hidden posts in a scene (GM only).
 func ListHiddenPosts(db *database.DB) gin.HandlerFunc {
 	svc := service.NewPostService(db.Pool)
@@ -407,6 +454,8 @@ func handlePostError(c *gin.Context, err error) {
 			http.StatusForbidden,
 			models.NewAPIError("NOT_MEMBER", "You are not a member of this campaign"),
 		)
+	case strings.HasPrefix(err.Error(), "witness not in scene"):
+		models.ValidationError(c, err.Error())
 	default:
 		// Log the actual error for debugging
 		//nolint:sloglint // Error logging doesn't need structured logger injection

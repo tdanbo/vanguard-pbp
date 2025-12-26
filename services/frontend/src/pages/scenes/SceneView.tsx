@@ -34,7 +34,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useRollStore } from '@/stores/rollStore'
 import { useToast } from '@/hooks/use-toast'
 import { useSceneSubscription } from '@/hooks/useSceneSubscription'
-import type { PassState, CampaignPhase, CampaignSettings, Post, PassStateEvent } from '@/types'
+import type { PassState, CampaignPhase, CampaignSettings, Post } from '@/types'
 
 export default function SceneView() {
   const { id: campaignId, sceneId } = useParams<{
@@ -160,10 +160,10 @@ export default function SceneView() {
         ])
         await fetchScenePassStates(campaignId, sceneId)
         await Promise.all([
-          fetchPosts(campaignId, sceneId),
           getRollsInScene(sceneId),
           fetchPhaseStatus(campaignId),
         ])
+        // Posts fetching is handled by the character selection effect below
       } catch (error) {
         toast({
           variant: 'destructive',
@@ -180,18 +180,30 @@ export default function SceneView() {
     fetchCampaign,
     fetchScenes,
     fetchCharacters,
-    fetchPosts,
     fetchScenePassStates,
     fetchPhaseStatus,
     getRollsInScene,
     toast,
   ])
 
+  // Refetch posts when selected character changes
+  // Skip passing character ID for narrator/GM mode (sees all posts)
+  useEffect(() => {
+    if (!campaignId || !sceneId) return
+
+    const characterIdParam =
+      effectiveSelectedCharacterId && effectiveSelectedCharacterId !== 'narrator'
+        ? effectiveSelectedCharacterId
+        : undefined
+
+    fetchPosts(campaignId, sceneId, characterIdParam)
+  }, [campaignId, sceneId, effectiveSelectedCharacterId, fetchPosts])
+
   // Subscribe to scene events (pass state changes, posts, etc.)
   useSceneSubscription({
     sceneId: sceneId || null,
     handlers: {
-      onPassStateChanged: (_event: PassStateEvent) => {
+      onPassStateChanged: () => {
         // Refetch pass states when they change
         if (campaignId && sceneId) {
           fetchScenePassStates(campaignId, sceneId)
@@ -330,7 +342,11 @@ export default function SceneView() {
 
   const handlePostCreated = () => {
     if (campaignId && sceneId) {
-      fetchPosts(campaignId, sceneId)
+      const characterIdParam =
+        effectiveSelectedCharacterId && effectiveSelectedCharacterId !== 'narrator'
+          ? effectiveSelectedCharacterId
+          : undefined
+      fetchPosts(campaignId, sceneId, characterIdParam)
     }
   }
 
@@ -355,7 +371,11 @@ export default function SceneView() {
   const handleEditComplete = () => {
     setEditingPost(null)
     if (campaignId && sceneId) {
-      fetchPosts(campaignId, sceneId)
+      const characterIdParam =
+        effectiveSelectedCharacterId && effectiveSelectedCharacterId !== 'narrator'
+          ? effectiveSelectedCharacterId
+          : undefined
+      fetchPosts(campaignId, sceneId, characterIdParam)
     }
   }
 
@@ -366,7 +386,11 @@ export default function SceneView() {
   const handlePostDeleted = () => {
     setEditingPost(null)
     if (campaignId && sceneId) {
-      fetchPosts(campaignId, sceneId)
+      const characterIdParam =
+        effectiveSelectedCharacterId && effectiveSelectedCharacterId !== 'narrator'
+          ? effectiveSelectedCharacterId
+          : undefined
+      fetchPosts(campaignId, sceneId, characterIdParam)
     }
   }
 
@@ -512,7 +536,9 @@ export default function SceneView() {
             isGM={isGM}
             currentUserId={user?.id}
             isLoading={loadingPosts}
+            sceneCharacters={sceneCharacters}
             onEditPost={handleEditPost}
+            onDeletePost={handlePostDeleted}
             onRollUpdated={handleRollUpdated}
           />
 
@@ -573,7 +599,6 @@ export default function SceneView() {
         onEditComplete={handleEditComplete}
         onEditCancel={handleEditCancel}
         isGM={isGM}
-        onPostDeleted={handlePostDeleted}
         currentPhase={currentCampaign?.current_phase}
         selectedCharacterPassState={selectedCharacterPassState}
         isExpired={phaseStatus?.isExpired ?? false}

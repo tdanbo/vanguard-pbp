@@ -347,6 +347,40 @@ func (s *ImageService) DeleteSceneHeader(
 	return nil
 }
 
+// DeleteSceneHeaderByURL deletes a scene header image from storage given its URL.
+// This is used when deleting a scene to clean up its header image.
+// Errors are intentionally ignored since the scene is already deleted.
+func (s *ImageService) DeleteSceneHeaderByURL(
+	ctx context.Context,
+	campaignID uuid.UUID,
+	headerImageURL string,
+) {
+	if headerImageURL == "" {
+		return
+	}
+
+	// Delete from storage
+	path := fmt.Sprintf(
+		"campaigns/%s/scenes/%s",
+		campaignID,
+		filepath.Base(headerImageURL),
+	)
+	fileSize, _ := s.storage.GetFileSize(ctx, StorageBucket, path)
+
+	if deleteErr := s.storage.Delete(ctx, StorageBucket, path); deleteErr != nil {
+		// Intentionally ignoring storage delete errors
+		_ = deleteErr
+	}
+
+	// Update campaign storage
+	if fileSize > 0 {
+		_, _ = s.queries.DecrementCampaignStorage(ctx, generated.DecrementCampaignStorageParams{
+			ID:               pgtype.UUID{Bytes: campaignID, Valid: true},
+			StorageUsedBytes: fileSize,
+		})
+	}
+}
+
 // validateAndUpload validates the image and uploads it to storage.
 func (s *ImageService) validateAndUpload(
 	ctx context.Context,

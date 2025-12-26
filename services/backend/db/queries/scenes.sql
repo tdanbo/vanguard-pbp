@@ -166,6 +166,18 @@ WHERE s.campaign_id = $1
   AND s.is_archived = false
 ORDER BY s.created_at DESC;
 
+-- name: GetVisibleScenesForUser :many
+-- Returns scenes where any of the user's assigned characters have witnessed posts
+-- Used for fog of war filtering - aggregates visibility across all user's characters
+SELECT DISTINCT s.*
+FROM scenes s
+INNER JOIN posts p ON p.scene_id = s.id
+INNER JOIN character_assignments ca ON ca.character_id = ANY(p.witnesses)
+WHERE s.campaign_id = $1
+  AND ca.user_id = $2
+  AND s.is_archived = false
+ORDER BY s.created_at ASC;
+
 -- name: GetPresentCharactersInScene :many
 -- Returns all characters currently in a scene (for witness capture)
 SELECT c.id

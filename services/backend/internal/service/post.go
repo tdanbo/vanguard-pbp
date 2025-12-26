@@ -190,9 +190,17 @@ func (s *PostService) CreatePost(
 
 	// Prepare witnesses (ensure empty slice, not nil)
 	witnesses := make([]pgtype.UUID, 0)
-	if submitImmediately && !req.IsHidden {
-		// Get all characters in scene as witnesses
-		witnesses = append(witnesses, sceneWithCampaign.CharacterIds...)
+	if submitImmediately {
+		if req.IsHidden {
+			// Hidden posts: only the author's character is a witness
+			// (so they can see their own hidden post)
+			if characterID.Valid {
+				witnesses = append(witnesses, characterID)
+			}
+		} else {
+			// Regular posts: all scene characters are witnesses
+			witnesses = append(witnesses, sceneWithCampaign.CharacterIds...)
+		}
 	}
 
 	// Prepare optional fields
@@ -302,7 +310,14 @@ func (s *PostService) SubmitPost(
 
 	// Prepare witnesses
 	var witnesses []pgtype.UUID
-	if !isHidden {
+	if isHidden {
+		// Hidden posts: only the author's character is a witness
+		// (so they can see their own hidden post)
+		if post.CharacterID.Valid {
+			witnesses = append(witnesses, post.CharacterID)
+		}
+	} else {
+		// Regular posts: all scene characters are witnesses
 		witnesses = scene.CharacterIds
 	}
 
@@ -760,6 +775,73 @@ func (s *PostService) UnhidePost(
 
 	// Update witnesses and unhide
 	updatedPost, err := s.queries.UnhidePostWithCustomWitnesses(ctx, generated.UnhidePostWithCustomWitnessesParams{
+		ID:        postUUID,
+		Witnesses: witnesses,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.postToResponse(&updatedPost), nil
+}
+
+// UpdatePostWitnessesRequest represents the request to update post witnesses.
+type UpdatePostWitnessesRequest struct {
+	Witnesses []string `json:"witnesses"`
+}
+
+// UpdatePostWitnesses updates the witnesses on a post (GM only).
+func (s *PostService) UpdatePostWitnesses(
+	ctx context.Context,
+	userID pgtype.UUID,
+	postID string,
+	req UpdatePostWitnessesRequest,
+) (*PostResponse, error) {
+	postUUID := parseUUIDString(postID)
+
+	// Get post
+	post, err := s.queries.GetPost(ctx, postUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPostNotFound
+		}
+		return nil, err
+	}
+
+	// Get scene
+	scene, err := s.queries.GetScene(ctx, post.SceneID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only GM can update witnesses
+	isGM, err := s.queries.IsUserGM(ctx, generated.IsUserGMParams{
+		CampaignID: scene.CampaignID,
+		UserID:     userID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !isGM {
+		return nil, ErrNotGM
+	}
+
+	// Validate all witness IDs are characters in the scene
+	sceneCharIDs := make(map[string]bool)
+	for _, charID := range scene.CharacterIds {
+		sceneCharIDs[formatUUID(charID.Bytes[:])] = true
+	}
+
+	witnesses := make([]pgtype.UUID, 0, len(req.Witnesses))
+	for _, wID := range req.Witnesses {
+		if !sceneCharIDs[wID] {
+			return nil, errors.New("witness not in scene: " + wID)
+		}
+		witnesses = append(witnesses, parseUUIDString(wID))
+	}
+
+	// Update witnesses
+	updatedPost, err := s.queries.EditPostWitnesses(ctx, generated.EditPostWitnessesParams{
 		ID:        postUUID,
 		Witnesses: witnesses,
 	})

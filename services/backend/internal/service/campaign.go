@@ -97,6 +97,7 @@ func (s *CampaignService) CreateCampaign(
 		CampaignID: campaign.ID,
 		UserID:     userID,
 		Role:       generated.MemberRoleGm,
+		Alias:      pgtype.Text{String: "", Valid: false},
 	})
 	if err != nil {
 		return nil, err

@@ -46,6 +46,7 @@ export type Database = {
       }
       campaign_members: {
         Row: {
+          alias: string | null
           campaign_id: string
           id: string
           joined_at: string
@@ -53,6 +54,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          alias?: string | null
           campaign_id: string
           id?: string
           joined_at?: string
@@ -60,6 +62,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          alias?: string | null
           campaign_id?: string
           id?: string
           joined_at?: string

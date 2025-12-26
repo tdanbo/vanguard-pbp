@@ -174,3 +174,12 @@ WHERE p.scene_id = $1
     AND ($4::timestamptz IS NULL OR p.created_at > $4)
 ORDER BY p.created_at ASC
 LIMIT $5;
+
+-- name: EditPostWitnesses :one
+-- GM-only: Update witnesses on a post without changing hidden status
+UPDATE posts
+SET
+    witnesses = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;

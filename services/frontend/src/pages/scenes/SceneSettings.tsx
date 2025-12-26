@@ -127,7 +127,7 @@ export default function SceneSettings() {
         title: 'Settings saved',
         description: 'Scene settings have been updated.',
       })
-      navigate(`/campaigns/${campaignId}/scenes/${sceneId}`)
+      navigate(-1)
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -214,10 +214,8 @@ export default function SceneSettings() {
   return (
     <ManagementLayout maxWidth="2xl">
       <div className="mb-6">
-        <Button variant="ghost" asChild className="mb-2">
-          <Link to={`/campaigns/${campaignId}/scenes/${sceneId}`}>
-            &larr; Back to scene
-          </Link>
+        <Button variant="ghost" className="mb-2" onClick={() => navigate(-1)}>
+          &larr; Back
         </Button>
         <h1 className="font-display text-2xl md:text-3xl font-semibold">Scene Settings</h1>
         <p className="text-muted-foreground mt-1">{scene.title}</p>
@@ -379,8 +377,8 @@ export default function SceneSettings() {
 
           {/* Submit */}
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-            <Button type="button" variant="outline" asChild>
-              <Link to={`/campaigns/${campaignId}/scenes/${sceneId}`}>Cancel</Link>
+            <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+              Cancel
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

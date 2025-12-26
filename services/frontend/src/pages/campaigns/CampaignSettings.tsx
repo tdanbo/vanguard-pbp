@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +48,8 @@ const settingsSchema = z.object({
   description: z.string().max(2000).optional(),
   timeGatePreset: z.enum(['24h', '2d', '3d', '4d', '5d']),
   characterLimit: z.enum(['1000', '3000', '6000', '10000']),
+  fogOfWar: z.boolean(),
+  hiddenPosts: z.boolean(),
   oocVisibility: z.enum(['all', 'gm_only']),
 })
 
@@ -89,6 +92,8 @@ export default function CampaignSettings() {
       description: '',
       timeGatePreset: '3d',
       characterLimit: '3000',
+      fogOfWar: false,
+      hiddenPosts: false,
       oocVisibility: 'gm_only',
     },
   })
@@ -160,6 +165,8 @@ export default function CampaignSettings() {
         description: currentCampaign.description || '',
         timeGatePreset: currentCampaign.settings.timeGatePreset,
         characterLimit: String(currentCampaign.settings.characterLimit) as SettingsFormValues['characterLimit'],
+        fogOfWar: currentCampaign.settings.fogOfWar ?? false,
+        hiddenPosts: currentCampaign.settings.hiddenPosts ?? false,
         oocVisibility: currentCampaign.settings.oocVisibility,
       })
     }
@@ -175,6 +182,8 @@ export default function CampaignSettings() {
           ...currentCampaign?.settings,
           timeGatePreset: values.timeGatePreset,
           characterLimit: characterLimitOptions[values.characterLimit],
+          fogOfWar: values.fogOfWar,
+          hiddenPosts: values.hiddenPosts,
           oocVisibility: values.oocVisibility,
         },
       })
@@ -328,6 +337,58 @@ export default function CampaignSettings() {
                 )}
               />
 
+            </CardContent>
+          </Card>
+
+          {/* Secrecy Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-display">Secrecy Settings</CardTitle>
+              <CardDescription>Configure information visibility and anti-metagaming features</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="fogOfWar"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Fog of War</FormLabel>
+                      <FormDescription>
+                        Controls information visibility across scenes. When enabled, characters only see scenes where they have witnessed at least one post.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="hiddenPosts"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Hidden Posts</FormLabel>
+                      <FormDescription>
+                        Allows secret posts within a shared scene. When enabled, players can mark posts as hidden so only the GM sees them.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="oocVisibility"
@@ -345,7 +406,9 @@ export default function CampaignSettings() {
                         <SelectItem value="gm_only">GM only</SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormDescription>Who can see OOC (out-of-character) comments</FormDescription>
+                    <FormDescription>
+                      Controls who can see out-of-character text on posts.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

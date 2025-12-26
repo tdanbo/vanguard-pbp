@@ -36,9 +36,20 @@ interface CharacterManagerProps {
   scenes?: Scene[]
   characterTypeFilter?: 'pc' | 'npc'
   playerOwnedOnly?: boolean
+  selectedCharacterId?: string | null
+  onSelectCharacter?: (character: Character) => void
 }
 
-export function CharacterManager({ campaignId, isGM, members, scenes = [], characterTypeFilter, playerOwnedOnly = false }: CharacterManagerProps) {
+export function CharacterManager({
+  campaignId,
+  isGM,
+  members,
+  scenes = [],
+  characterTypeFilter,
+  playerOwnedOnly = false,
+  selectedCharacterId,
+  onSelectCharacter,
+}: CharacterManagerProps) {
   const { user } = useAuthStore()
   const { toast } = useToast()
   const {
@@ -243,6 +254,8 @@ export function CharacterManager({ campaignId, isGM, members, scenes = [], chara
           onArchive={handleArchive}
           onAssign={openAssignDialog}
           onUnassign={handleUnassign}
+          selectedCharacterId={selectedCharacterId}
+          onSelectCharacter={onSelectCharacter}
         />
       )}
 

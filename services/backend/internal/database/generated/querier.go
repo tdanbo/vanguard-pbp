@@ -70,6 +70,8 @@ type Querier interface {
 	DeleteScene(ctx context.Context, id pgtype.UUID) error
 	DeleteSceneComposeLocks(ctx context.Context, sceneID pgtype.UUID) error
 	DeliverAllQueuedNotifications(ctx context.Context, userID pgtype.UUID) (int64, error)
+	// GM-only: Update witnesses on a post without changing hidden status
+	EditPostWitnesses(ctx context.Context, arg EditPostWitnessesParams) (Post, error)
 	ExecuteRoll(ctx context.Context, arg ExecuteRollParams) (Roll, error)
 	FindSimilarNotification(ctx context.Context, arg FindSimilarNotificationParams) (Notification, error)
 	// Returns all non-archived characters in active scenes for a campaign
@@ -165,6 +167,9 @@ type Querier interface {
 	GetUsersWithDigestPreference(ctx context.Context, emailFrequency NotificationFrequency) ([]NotificationPreference, error)
 	// Returns scenes where the character has witnessed at least one post
 	GetVisibleScenesForCharacter(ctx context.Context, arg GetVisibleScenesForCharacterParams) ([]Scene, error)
+	// Returns scenes where any of the user's assigned characters have witnessed posts
+	// Used for fog of war filtering - aggregates visibility across all user's characters
+	GetVisibleScenesForUser(ctx context.Context, arg GetVisibleScenesForUserParams) ([]Scene, error)
 	GetWitnessUsers(ctx context.Context, dollar_1 []pgtype.UUID) ([]pgtype.UUID, error)
 	IncrementCampaignStorage(ctx context.Context, arg IncrementCampaignStorageParams) (int64, error)
 	IncrementSceneCount(ctx context.Context, id pgtype.UUID) error

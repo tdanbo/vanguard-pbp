@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tdanbo/vanguard-pbp/services/backend/internal/database"
 	"github.com/tdanbo/vanguard-pbp/services/backend/internal/database/generated"
 	"github.com/tdanbo/vanguard-pbp/services/backend/internal/middleware"
@@ -30,6 +32,7 @@ type SceneCharacterRequest struct {
 }
 
 // ListCampaignScenes returns all scenes in a campaign.
+// Accepts optional characterId query parameter for character-specific fog of war filtering.
 func ListCampaignScenes(db *database.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDStr, ok := middleware.GetUserID(c)
@@ -46,9 +49,21 @@ func ListCampaignScenes(db *database.DB) gin.HandlerFunc {
 		}
 
 		userID := parseUUID(userIDStr)
+
+		// Parse optional characterId query parameter for fog of war filtering
+		var characterIDPtr *pgtype.UUID
+		if characterIDStr := c.Query("characterId"); characterIDStr != "" {
+			characterID := parseUUID(characterIDStr)
+			if !characterID.Valid {
+				models.ValidationError(c, "Invalid character ID format")
+				return
+			}
+			characterIDPtr = &characterID
+		}
+
 		svc := service.NewSceneService(db.Pool)
 
-		scenes, err := svc.ListCampaignScenes(c.Request.Context(), campaignID, userID)
+		scenes, err := svc.ListCampaignScenes(c.Request.Context(), campaignID, userID, characterIDPtr)
 		if err != nil {
 			handleSceneServiceError(c, err)
 			return
@@ -338,6 +353,44 @@ func RemoveCharacterFromScene(db *database.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, scene)
+	}
+}
+
+// DeleteScene permanently deletes a scene (GM only).
+func DeleteScene(db *database.DB, imageService *service.ImageService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDStr, ok := middleware.GetUserID(c)
+		if !ok {
+			models.UnauthorizedError(c)
+			return
+		}
+
+		sceneIDStr := c.Param("sceneId")
+		sceneID := parseUUID(sceneIDStr)
+		if !sceneID.Valid {
+			models.ValidationError(c, "Invalid scene ID format")
+			return
+		}
+
+		userID := parseUUID(userIDStr)
+		svc := service.NewSceneService(db.Pool)
+
+		headerImageURL, campaignID, err := svc.DeleteScene(c.Request.Context(), sceneID, userID)
+		if err != nil {
+			handleSceneServiceError(c, err)
+			return
+		}
+
+		// Clean up scene header image from storage if present
+		if headerImageURL != "" && imageService != nil {
+			imageService.DeleteSceneHeaderByURL(
+				c.Request.Context(),
+				uuid.UUID(campaignID.Bytes),
+				headerImageURL,
+			)
+		}
+
+		c.Status(http.StatusNoContent)
 	}
 }
 

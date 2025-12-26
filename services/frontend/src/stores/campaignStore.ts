@@ -83,11 +83,12 @@ interface CampaignState {
   unassignCharacter: (campaignId: string, characterId: string) => Promise<void>
 
   // Scenes
-  fetchScenes: (campaignId: string) => Promise<void>
+  fetchScenes: (campaignId: string, characterId?: string) => Promise<void>
   createScene: (campaignId: string, data: CreateSceneRequest) => Promise<CreateSceneResponse>
   updateScene: (campaignId: string, sceneId: string, data: UpdateSceneRequest) => Promise<void>
   archiveScene: (campaignId: string, sceneId: string) => Promise<void>
   unarchiveScene: (campaignId: string, sceneId: string) => Promise<void>
+  deleteScene: (campaignId: string, sceneId: string) => Promise<void>
   addCharacterToScene: (campaignId: string, sceneId: string, characterId: string) => Promise<void>
   removeCharacterFromScene: (campaignId: string, sceneId: string, characterId: string) => Promise<void>
 
@@ -98,6 +99,7 @@ interface CampaignState {
   deletePost: (postId: string) => Promise<void>
   submitPost: (postId: string, isHidden?: boolean) => Promise<Post>
   unhidePost: (postId: string) => Promise<Post>
+  updatePostWitnesses: (postId: string, witnesses: string[]) => Promise<Post>
   clearPosts: () => void
 
   // Phase management
@@ -510,10 +512,11 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   },
 
   // Scenes
-  fetchScenes: async (campaignId: string) => {
+  fetchScenes: async (campaignId: string, characterId?: string) => {
     set({ loadingScenes: true, error: null })
     try {
-      const response = await api<ListScenesResponse>(`/api/v1/campaigns/${campaignId}/scenes`)
+      const queryParam = characterId ? `?characterId=${characterId}` : ''
+      const response = await api<ListScenesResponse>(`/api/v1/campaigns/${campaignId}/scenes${queryParam}`)
       set({ scenes: response.scenes ?? [], sceneWarning: response.warning || null, loadingScenes: false })
     } catch (error) {
       set({ error: (error as Error).message, loadingScenes: false })
@@ -581,6 +584,22 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       })
       set((state) => ({
         scenes: state.scenes.map((s) => (s.id === sceneId ? scene : s)),
+        loadingScenes: false,
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message, loadingScenes: false })
+      throw error
+    }
+  },
+
+  deleteScene: async (campaignId: string, sceneId: string) => {
+    set({ loadingScenes: true, error: null })
+    try {
+      await api(`/api/v1/campaigns/${campaignId}/scenes/${sceneId}`, {
+        method: 'DELETE',
+      })
+      set((state) => ({
+        scenes: state.scenes.filter((s) => s.id !== sceneId),
         loadingScenes: false,
       }))
     } catch (error) {
@@ -719,6 +738,24 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     try {
       const post = await api<Post>(`/api/v1/posts/${postId}/unhide`, {
         method: 'POST',
+      })
+      set((state) => ({
+        posts: state.posts.map((p) => (p.id === postId ? post : p)),
+        loadingPosts: false,
+      }))
+      return post
+    } catch (error) {
+      set({ error: (error as Error).message, loadingPosts: false })
+      throw error
+    }
+  },
+
+  updatePostWitnesses: async (postId: string, witnesses: string[]) => {
+    set({ loadingPosts: true, error: null })
+    try {
+      const post = await api<Post>(`/api/v1/posts/${postId}/witnesses`, {
+        method: 'PATCH',
+        body: { witnesses },
       })
       set((state) => ({
         posts: state.posts.map((p) => (p.id === postId ? post : p)),

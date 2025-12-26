@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { ImmersivePostCard } from './ImmersivePostCard'
 import { EmptyPosts } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { Post, CampaignSettings, Roll } from '@/types'
+import type { Post, CampaignSettings, Roll, Character } from '@/types'
 
 interface PostStreamProps {
   posts: Post[]
@@ -11,7 +11,9 @@ interface PostStreamProps {
   isGM?: boolean
   currentUserId?: string
   isLoading?: boolean
+  sceneCharacters?: Character[]
   onEditPost?: (post: Post) => void
+  onDeletePost?: (post: Post) => void
   onRollUpdated?: () => void
 }
 
@@ -22,7 +24,9 @@ export function PostStream({
   isGM = false,
   currentUserId,
   isLoading = false,
+  sceneCharacters = [],
   onEditPost,
+  onDeletePost,
   onRollUpdated,
 }: PostStreamProps) {
   // Calculate the last post ID for edit icon logic
@@ -69,7 +73,9 @@ export function PostStream({
           isGM={isGM}
           currentUserId={currentUserId}
           isLastPost={post.id === lastPostId}
+          sceneCharacters={sceneCharacters}
           onEdit={onEditPost}
+          onDelete={onDeletePost}
           onRollUpdated={onRollUpdated}
         />
       ))}

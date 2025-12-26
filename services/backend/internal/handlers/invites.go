@@ -12,7 +12,7 @@ import (
 
 // JoinCampaignRequest represents the request to join a campaign via invite code.
 type JoinCampaignRequest struct {
-	Code  string `binding:"required" json:"code"`
+	Code  string `binding:"required"          json:"code"`
 	Alias string `binding:"omitempty,max=255" json:"alias"`
 }
 

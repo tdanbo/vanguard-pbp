@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -24,6 +23,7 @@ import {
   Save,
 } from 'lucide-react'
 import { PostBlockEditor } from './PostBlock'
+import { HiddenPostToggle } from './HiddenPostToggle'
 import { useComposeLock } from '@/hooks/useComposeLock'
 import { useDraft } from '@/hooks/useDraft'
 import { useCampaignStore } from '@/stores/campaignStore'
@@ -335,22 +335,11 @@ export function PostComposer({
 
         {/* Hidden post toggle */}
         {settings.hiddenPosts && (
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div className="flex items-center gap-2">
-              <EyeOff className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <Label htmlFor="isHidden">Hidden Post</Label>
-                <p className="text-xs text-muted-foreground">
-                  Only visible to GM until revealed
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="isHidden"
-              checked={isHidden}
-              onCheckedChange={setIsHidden}
-            />
-          </div>
+          <HiddenPostToggle
+            isHidden={isHidden}
+            onChange={setIsHidden}
+            disabled={isSubmitting}
+          />
         )}
       </CardContent>
 
@@ -358,33 +347,21 @@ export function PostComposer({
         <Button variant="outline" onClick={handleCancel}>
           Cancel
         </Button>
-        <div className="flex gap-2">
-          {settings.hiddenPosts && (
-            <Button
-              variant="secondary"
-              onClick={() => handleSubmit(true)}
-              disabled={isSubmitting || !isLocked}
-            >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <EyeOff className="mr-2 h-4 w-4" />
-              )}
-              Submit Hidden
-            </Button>
+        <Button
+          onClick={() => handleSubmit(isHidden)}
+          disabled={isSubmitting || !isLocked}
+          variant={isHidden ? 'default' : 'default'}
+          className={isHidden ? 'bg-amber-600 hover:bg-amber-700' : ''}
+        >
+          {isSubmitting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : isHidden ? (
+            <EyeOff className="mr-2 h-4 w-4" />
+          ) : (
+            <Send className="mr-2 h-4 w-4" />
           )}
-          <Button
-            onClick={() => handleSubmit(isHidden)}
-            disabled={isSubmitting || !isLocked}
-          >
-            {isSubmitting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="mr-2 h-4 w-4" />
-            )}
-            Submit Post
-          </Button>
-        </div>
+          {isHidden ? 'Submit Hidden Post' : 'Submit Post'}
+        </Button>
       </CardFooter>
     </Card>
   )

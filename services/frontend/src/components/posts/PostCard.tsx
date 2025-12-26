@@ -20,14 +20,14 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   MoreVertical,
-  Eye,
   EyeOff,
   Trash2,
   Lock,
   MessageSquare,
+  Pencil,
 } from 'lucide-react'
 import { PostBlockDisplay } from './PostBlock'
-import { UnhidePostDialog } from './UnhidePostDialog'
+import { WitnessPopover } from './WitnessPopover'
 import { useCampaignStore } from '@/stores/campaignStore'
 import { useToast } from '@/hooks/use-toast'
 import type { Post, CampaignSettings, Character } from '@/types'
@@ -38,18 +38,28 @@ interface PostCardProps {
   currentUserId: string
   settings: CampaignSettings
   sceneCharacters?: Character[]
+  isLastPost?: boolean
+  onEdit?: (post: Post) => void
 }
 
-export function PostCard({ post, isGM, currentUserId, settings, sceneCharacters = [] }: PostCardProps) {
+export function PostCard({ post, isGM, currentUserId, settings, sceneCharacters = [], isLastPost = false, onEdit }: PostCardProps) {
   const { toast } = useToast()
   const { deletePost } = useCampaignStore()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [showUnhideDialog, setShowUnhideDialog] = useState(false)
-  const [currentPost, setCurrentPost] = useState(post)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const isOwner = post.userId === currentUserId
-  const canDelete = isGM
-  const canUnhide = isGM && post.isHidden
+
+  // Determine if user can edit this post
+  // GM can always edit any post (locked or not), owner can only edit their unlocked last post
+  const canEdit = isGM || (!post.isLocked && isOwner && isLastPost)
+
+  // Determine if user can delete this post
+  // GM can always delete any post (locked or not), owner can only delete their unlocked last post
+  const canDelete = isGM || (!post.isLocked && isOwner && isLastPost)
+
+  // Show action menu if user can do anything
+  const showActionMenu = canEdit || canDelete
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -66,6 +76,7 @@ export function PostCard({ post, isGM, currentUserId, settings, sceneCharacters 
   }
 
   const handleDelete = async () => {
+    setIsDeleting(true)
     try {
       await deletePost(post.id)
       toast({ title: 'Post deleted' })
@@ -75,27 +86,10 @@ export function PostCard({ post, isGM, currentUserId, settings, sceneCharacters 
         title: 'Failed to delete post',
         description: (error as Error).message,
       })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteDialog(false)
     }
-    setShowDeleteDialog(false)
-  }
-
-  const handleUnhideClick = () => {
-    if (sceneCharacters.length > 0) {
-      // Show dialog for custom witness selection
-      setShowUnhideDialog(true)
-    } else {
-      // No scene characters - shouldn't happen, but handle gracefully
-      toast({
-        variant: 'destructive',
-        title: 'Cannot reveal post',
-        description: 'No characters in scene',
-      })
-    }
-  }
-
-  const handlePostUnhidden = (updatedPost: Post) => {
-    setCurrentPost(updatedPost)
-    toast({ title: 'Post revealed' })
   }
 
   // For hidden posts that user can't see
@@ -130,13 +124,7 @@ export function PostCard({ post, isGM, currentUserId, settings, sceneCharacters 
                 <Badge variant="outline" className="text-xs">
                   {post.characterType.toUpperCase()}
                 </Badge>
-                {post.isHidden && (
-                  <Badge variant="secondary" className="gap-1 text-xs">
-                    <EyeOff className="h-3 w-3" />
-                    Hidden
-                  </Badge>
-                )}
-                {post.isLocked && (
+                {post.isLocked && !isGM && (
                   <Badge variant="secondary" className="gap-1 text-xs">
                     <Lock className="h-3 w-3" />
                     Locked
@@ -149,32 +137,54 @@ export function PostCard({ post, isGM, currentUserId, settings, sceneCharacters 
             </div>
           </div>
 
-          {(canDelete || canUnhide) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canUnhide && (
-                  <DropdownMenuItem onClick={handleUnhideClick}>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Reveal Post
-                  </DropdownMenuItem>
-                )}
-                {canDelete && (
-                  <DropdownMenuItem
-                    onClick={() => setShowDeleteDialog(true)}
-                    className="text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete Post
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <div className="flex items-center gap-1">
+            {/* Witness viewer button (shows EyeOff for hidden posts) */}
+            <WitnessPopover
+              witnessIds={post.witnesses || []}
+              characters={sceneCharacters}
+              isGM={isGM}
+              postId={post.id}
+              isHidden={post.isHidden}
+            />
+
+            {/* Lock icon for locked posts (only shown to players, not GMs) */}
+            {post.isLocked && !isGM && (
+              <div
+                className="text-muted-foreground/30 p-2"
+                title="Post is locked (newer posts exist)"
+              >
+                <Lock className="h-4 w-4" />
+              </div>
+            )}
+
+            {/* Action menu (GM can always see; players only on unlocked posts) */}
+            {showActionMenu && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canEdit && (
+                    <DropdownMenuItem onClick={() => onEdit?.(post)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit Post
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <DropdownMenuItem
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Post
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
 
         {/* Post content blocks */}
@@ -219,22 +229,17 @@ export function PostCard({ post, isGM, currentUserId, settings, sceneCharacters 
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive">
-              Delete
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Unhide post dialog */}
-      <UnhidePostDialog
-        open={showUnhideDialog}
-        onOpenChange={setShowUnhideDialog}
-        post={currentPost}
-        sceneCharacters={sceneCharacters}
-        onUnhidden={handlePostUnhidden}
-      />
     </>
   )
 }

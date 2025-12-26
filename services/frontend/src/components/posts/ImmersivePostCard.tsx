@@ -2,17 +2,39 @@ import { useState } from "react";
 import { CharacterPortrait } from "@/components/character/CharacterPortrait";
 import { PostRollButton } from "@/components/rolls/PostRollButton";
 import { PostRollModal } from "@/components/rolls/PostRollModal";
+import { WitnessPopover } from "./WitnessPopover";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import {
     MessageSquare,
-    EyeOff,
     ChevronDown,
     ChevronUp,
     Pencil,
     Lock,
+    EyeOff,
+    MoreVertical,
+    Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils";
-import type { Post, PostBlock, CampaignSettings, Roll } from "@/types";
+import { useCampaignStore } from "@/stores/campaignStore";
+import { useToast } from "@/hooks/use-toast";
+import type { Post, PostBlock, CampaignSettings, Roll, Character } from "@/types";
 import { Card } from "../ui";
 
 interface ImmersivePostCardProps {
@@ -22,7 +44,9 @@ interface ImmersivePostCardProps {
     isGM?: boolean;
     currentUserId?: string;
     isLastPost?: boolean;
+    sceneCharacters?: Character[];
     onEdit?: (post: Post) => void;
+    onDelete?: (post: Post) => void;
     onRollUpdated?: () => void;
 }
 
@@ -33,14 +57,50 @@ export function ImmersivePostCard({
     isGM = false,
     currentUserId,
     isLastPost = false,
+    sceneCharacters = [],
     onEdit,
+    onDelete,
     onRollUpdated,
 }: ImmersivePostCardProps) {
+    const { toast } = useToast();
+    const { deletePost } = useCampaignStore();
     const [showOOC, setShowOOC] = useState(false);
     const [rollModalOpen, setRollModalOpen] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     const hasOOC = Boolean(post.oocText);
     const canSeeOOC = settings.oocVisibility === "all" || isGM;
     const isOwner = post.userId === currentUserId;
+
+    // Determine if user can edit this post
+    // GM can always edit any post (locked or not), owner can only edit their unlocked last post
+    const canEdit = isGM || (!post.isLocked && isOwner && isLastPost);
+
+    // Determine if user can delete this post
+    // GM can always delete any post (locked or not), owner can only delete their unlocked last post
+    const canDelete = isGM || (!post.isLocked && isOwner && isLastPost);
+
+    // Show action menu if user can do anything
+    const showActionMenu = canEdit || canDelete;
+
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await deletePost(post.id);
+            toast({ title: "Post deleted" });
+            onDelete?.(post);
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Failed to delete post",
+                description: (error as Error).message,
+            });
+        } finally {
+            setIsDeleting(false);
+            setShowDeleteDialog(false);
+        }
+    };
 
     // Show roll button if post has intention or roll data
     const hasRoll = Boolean(post.intention || roll);
@@ -87,28 +147,57 @@ export function ImmersivePostCard({
 
                     {/* Content column */}
                     <div className="p-4 relative h-full flex flex-col overflow-hidden">
-                        {/* Upper right icons: Roll badge, Edit/Lock, Hidden indicator */}
+                        {/* Upper right icons: Witnesses, Roll badge, Edit/Lock, Hidden indicator */}
                         <div className="absolute top-3 right-3 flex items-center gap-2">
-                            {/* Edit/Lock icon for post owner (not shown for hidden posts) */}
-                            {isOwner && !post.isHidden && (
-                                <>
-                                    {isLastPost && !post.isLocked ? (
-                                        <button
-                                            onClick={() => onEdit?.(post)}
-                                            className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-                                            title="Edit post"
+                            {/* Witness viewer button (shows EyeOff for hidden posts) */}
+                            <WitnessPopover
+                                witnessIds={post.witnesses || []}
+                                characters={sceneCharacters}
+                                isGM={isGM}
+                                postId={post.id}
+                                isHidden={post.isHidden}
+                            />
+
+                            {/* Lock icon for locked posts (only shown to players, not GMs) */}
+                            {post.isLocked && !isGM && (
+                                <div
+                                    className="text-muted-foreground/30"
+                                    title="Post is locked (newer posts exist)"
+                                >
+                                    <Lock className="h-3.5 w-3.5" />
+                                </div>
+                            )}
+
+                            {/* Action menu (GM can always see; players only on unlocked posts) */}
+                            {showActionMenu && (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 text-muted-foreground/40 hover:text-muted-foreground"
                                         >
-                                            <Pencil className="h-4 w-4" />
-                                        </button>
-                                    ) : (
-                                        <div
-                                            className="text-muted-foreground/30"
-                                            title="Post is locked (newer posts exist)"
-                                        >
-                                            <Lock className="h-3.5 w-3.5" />
-                                        </div>
-                                    )}
-                                </>
+                                            <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        {canEdit && (
+                                            <DropdownMenuItem onClick={() => onEdit?.(post)}>
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </DropdownMenuItem>
+                                        )}
+                                        {canDelete && (
+                                            <DropdownMenuItem
+                                                onClick={() => setShowDeleteDialog(true)}
+                                                className="text-destructive focus:text-destructive"
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete
+                                            </DropdownMenuItem>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             )}
 
                             {/* Roll button */}
@@ -120,14 +209,6 @@ export function ImmersivePostCard({
                                     isGM={isGM}
                                     onClick={() => setRollModalOpen(true)}
                                 />
-                            )}
-
-                            {/* Hidden indicator */}
-                            {post.isHidden && (
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground bg-secondary/50 px-2 py-1 rounded">
-                                    <EyeOff className="h-3 w-3" />
-                                    Hidden
-                                </div>
                             )}
                         </div>
 
@@ -197,6 +278,28 @@ export function ImmersivePostCard({
                         onRollCompleted={onRollUpdated}
                     />
                 )}
+
+                {/* Delete confirmation dialog */}
+                <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Post</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Are you sure you want to delete this post? This action cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                {isDeleting ? "Deleting..." : "Delete"}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </Card>
     );

@@ -69,7 +69,7 @@ func run() error {
 	}
 
 	// Create router and register routes
-	router := setupRouter(cfg, jwtValidator, db, imageHandler)
+	router := setupRouter(cfg, jwtValidator, db, imageHandler, imageService)
 
 	// Start server
 	port := cfg.Port
@@ -86,6 +86,7 @@ func setupRouter(
 	jwtValidator *middleware.JWTValidator,
 	db *database.DB,
 	imageHandler *handlers.ImageHandler,
+	imageService *service.ImageService,
 ) *gin.Engine {
 	router := gin.New()
 
@@ -101,13 +102,18 @@ func setupRouter(
 	api := router.Group("/api/v1")
 	api.Use(middleware.Auth(jwtValidator))
 
-	registerAPIRoutes(api, db, imageHandler)
+	registerAPIRoutes(api, db, imageHandler, imageService)
 
 	return router
 }
 
 //nolint:funlen // Route registration requires many statements.
-func registerAPIRoutes(api *gin.RouterGroup, db *database.DB, imageHandler *handlers.ImageHandler) {
+func registerAPIRoutes(
+	api *gin.RouterGroup,
+	db *database.DB,
+	imageHandler *handlers.ImageHandler,
+	imageService *service.ImageService,
+) {
 	// User routes
 	api.GET("/me", handlers.GetCurrentUser())
 
@@ -152,6 +158,7 @@ func registerAPIRoutes(api *gin.RouterGroup, db *database.DB, imageHandler *hand
 	api.PATCH("/campaigns/:id/scenes/:sceneId", handlers.UpdateScene(db))
 	api.POST("/campaigns/:id/scenes/:sceneId/archive", handlers.ArchiveScene(db))
 	api.POST("/campaigns/:id/scenes/:sceneId/unarchive", handlers.UnarchiveScene(db))
+	api.DELETE("/campaigns/:id/scenes/:sceneId", handlers.DeleteScene(db, imageService))
 	api.POST("/campaigns/:id/scenes/:sceneId/characters", handlers.AddCharacterToScene(db))
 	api.DELETE(
 		"/campaigns/:id/scenes/:sceneId/characters/:characterId",
@@ -175,6 +182,7 @@ func registerAPIRoutes(api *gin.RouterGroup, db *database.DB, imageHandler *hand
 	api.DELETE("/posts/:postId", handlers.DeletePost(db))
 	api.POST("/posts/:postId/submit", handlers.SubmitPost(db))
 	api.POST("/posts/:postId/unhide", handlers.UnhidePost(db))
+	api.PATCH("/posts/:postId/witnesses", handlers.UpdatePostWitnesses(db))
 
 	// Compose lock routes
 	api.POST("/compose/acquire", handlers.AcquireComposeLock(db))

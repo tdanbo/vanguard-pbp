@@ -48,6 +48,7 @@ import { PlusCircle, Eye, EyeOff } from 'lucide-react'
 import { ThreeColumnLayout } from '@/components/layout'
 import { SceneCardsGrid } from '@/components/campaign'
 import { CharacterManager } from '@/components/character/CharacterManager'
+import { ActiveCharacterBar } from '@/components/character/ActiveCharacterBar'
 import { EmptyState } from '@/components/ui/empty-state'
 import { UnifiedHeader } from '@/components/phase/UnifiedHeader'
 
@@ -80,6 +81,23 @@ export default function CampaignDashboard() {
 
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
 
+  // Character selection state with localStorage persistence
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(() => {
+    if (!id) return null
+    const stored = localStorage.getItem(`vanguard:campaign:${id}:selectedCharacter`)
+    return stored || null
+  })
+
+  // Persist selection to localStorage
+  useEffect(() => {
+    if (!id) return
+    if (selectedCharacterId) {
+      localStorage.setItem(`vanguard:campaign:${id}:selectedCharacter`, selectedCharacterId)
+    } else {
+      localStorage.removeItem(`vanguard:campaign:${id}:selectedCharacter`)
+    }
+  }, [id, selectedCharacterId])
+
   // Scene state
   const [showArchivedScenes, setShowArchivedScenes] = useState(false)
   const [createSceneDialogOpen, setCreateSceneDialogOpen] = useState(false)
@@ -90,21 +108,46 @@ export default function CampaignDashboard() {
   const userCharacters = useMemo(() => {
     const isGM = currentCampaign?.user_role === 'gm'
     if (isGM || !user) return []
-    return characters.filter((c) => c.character_type === 'pc' && c.assigned_user_id === user.id)
+    return characters.filter((c) => c.character_type === 'pc' && c.assigned_user_id === user.id && !c.is_archived)
   }, [currentCampaign?.user_role, user, characters])
 
+  // Validate and get selected character (must be one of user's characters)
+  // Returns null if the stored selection is no longer valid (invalid selections are ignored)
+  const selectedCharacter = useMemo(() => {
+    if (!selectedCharacterId) return null
+    return userCharacters.find((c) => c.id === selectedCharacterId) || null
+  }, [selectedCharacterId, userCharacters])
+
+  // Initial data fetch (campaign, members, characters, phase)
   useEffect(() => {
     if (id) {
       fetchCampaign(id)
       fetchMembers(id)
       fetchCharacters(id)
-      fetchScenes(id)
       fetchPhaseStatus(id)
       fetchInvites(id).catch(() => {
         // Non-GMs can't fetch invites, that's ok
       })
     }
-  }, [id, fetchCampaign, fetchMembers, fetchCharacters, fetchScenes, fetchInvites, fetchPhaseStatus])
+  }, [id, fetchCampaign, fetchMembers, fetchCharacters, fetchInvites, fetchPhaseStatus])
+
+  // Fetch scenes - depends on fog of war and selected character
+  // For non-GM players with fog of war enabled, require a character to be selected
+  const fogOfWarEnabled = currentCampaign?.settings?.fogOfWar !== false
+  const isGMRole = currentCampaign?.user_role === 'gm'
+
+  // Determine if we should skip the scene fetch (fog of war enabled, non-GM, no character selected)
+  const requiresCharacterSelection = !isGMRole && fogOfWarEnabled && !selectedCharacterId
+
+  useEffect(() => {
+    if (!id) return
+    // Skip fetching scenes if character selection is required but none selected
+    if (requiresCharacterSelection) return
+
+    // Apply character filtering for non-GM players when fog of war is enabled
+    const shouldFilterByCharacter = !isGMRole && fogOfWarEnabled && selectedCharacterId
+    fetchScenes(id, shouldFilterByCharacter ? selectedCharacterId : undefined)
+  }, [id, fetchScenes, isGMRole, fogOfWarEnabled, selectedCharacterId, requiresCharacterSelection])
 
   if (loadingCampaign || !currentCampaign) {
     return (
@@ -381,11 +424,23 @@ export default function CampaignDashboard() {
             </div>
 
             {/* Scene cards grid */}
-            {visibleScenes.length === 0 ? (
+            {requiresCharacterSelection ? (
+              <EmptyState
+                icon={User}
+                title="Select a Character"
+                description="To view scenes, please select one of your characters from the 'My Characters' tab. Scenes are filtered based on your character's perspective."
+              />
+            ) : visibleScenes.length === 0 ? (
               <EmptyState
                 icon={BookOpen}
                 title="No scenes yet"
-                description={isGM ? "Create your first scene to get started." : "No scenes have been created yet."}
+                description={
+                  isGM
+                    ? "Create your first scene to get started."
+                    : fogOfWarEnabled && selectedCharacter
+                      ? `No scenes are visible to ${selectedCharacter.display_name} yet.`
+                      : "No scenes have been created yet."
+                }
               />
             ) : (
               <SceneCardsGrid
@@ -412,6 +467,8 @@ export default function CampaignDashboard() {
                 scenes={scenes}
                 characterTypeFilter="pc"
                 playerOwnedOnly={!isGM}
+                selectedCharacterId={!isGM ? selectedCharacterId : undefined}
+                onSelectCharacter={!isGM ? (character) => setSelectedCharacterId(character.id) : undefined}
               />
             )}
           </TabsContent>
@@ -506,10 +563,18 @@ export default function CampaignDashboard() {
             <AlertDialogAction onClick={handleLeave}>Leave Campaign</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-        </AlertDialog>
-        </div>
-        </ThreeColumnLayout>
-        )
+      </AlertDialog>
+      </div>
+
+      {/* Active Character Bar (players only) */}
+      {!isGM && (
+        <ActiveCharacterBar
+          character={selectedCharacter}
+          onClear={() => setSelectedCharacterId(null)}
+        />
+      )}
+    </ThreeColumnLayout>
+  )
         }
 
 function MemberRow({

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
@@ -162,9 +163,14 @@ func (s *SceneService) GetScene(
 }
 
 // ListCampaignScenes returns all scenes in a campaign.
+// When fog of war is enabled, players only see scenes where their characters have witnessed posts.
+// GMs always see all scenes.
+// If characterID is provided and valid, fog of war filtering uses that specific character instead
+// of aggregating across all user's characters.
 func (s *SceneService) ListCampaignScenes(
 	ctx context.Context,
 	campaignID, userID pgtype.UUID,
+	characterID *pgtype.UUID,
 ) ([]generated.Scene, error) {
 	// Verify user is a member
 	isMember, err := s.queries.IsCampaignMember(ctx, generated.IsCampaignMemberParams{
@@ -178,7 +184,70 @@ func (s *SceneService) ListCampaignScenes(
 		return nil, ErrNotMember
 	}
 
-	return s.queries.ListCampaignScenes(ctx, campaignID)
+	// Check if user is GM - GMs always see all scenes
+	isGM, err := s.queries.IsUserGM(ctx, generated.IsUserGMParams{
+		CampaignID: campaignID,
+		UserID:     userID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if isGM {
+		return s.queries.ListCampaignScenes(ctx, campaignID)
+	}
+
+	// Get campaign to check fog of war setting
+	campaign, err := s.queries.GetCampaign(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse settings to check fog of war
+	fogOfWarEnabled := s.isFogOfWarEnabled(campaign.Settings)
+
+	// If fog of war is disabled, show all scenes
+	if !fogOfWarEnabled {
+		return s.queries.ListCampaignScenes(ctx, campaignID)
+	}
+
+	// Fog of war enabled - check if we should filter by specific character
+	if characterID != nil && characterID.Valid {
+		// Use character-specific filtering
+		return s.queries.GetVisibleScenesForCharacter(ctx, generated.GetVisibleScenesForCharacterParams{
+			CampaignID: campaignID,
+			Column2:    *characterID,
+		})
+	}
+
+	// Fall back to aggregate visibility across all user's characters
+	return s.queries.GetVisibleScenesForUser(ctx, generated.GetVisibleScenesForUserParams{
+		CampaignID: campaignID,
+		UserID:     userID,
+	})
+}
+
+// isFogOfWarEnabled parses campaign settings and returns whether fog of war is enabled.
+func (s *SceneService) isFogOfWarEnabled(settingsJSON []byte) bool {
+	if len(settingsJSON) == 0 {
+		return true // Default to enabled per PRD
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(settingsJSON, &settings); err != nil {
+		return true // Default to enabled if parsing fails
+	}
+
+	fog, ok := settings["fogOfWar"]
+	if !ok {
+		return true // Default to enabled if not set
+	}
+
+	fogBool, ok := fog.(bool)
+	if !ok {
+		return true // Default to enabled if not a boolean
+	}
+
+	return fogBool
 }
 
 // UpdateSceneRequest represents the request to update a scene.
@@ -515,6 +584,63 @@ func (s *SceneService) autoDeleteOldestArchivedScene(
 	}
 
 	return formatUUID(oldest.ID.Bytes[:]), nil
+}
+
+// DeleteScene deletes a scene (GM only).
+// Returns the header image URL if present, so the caller can delete from storage.
+func (s *SceneService) DeleteScene(
+	ctx context.Context,
+	sceneID, userID pgtype.UUID,
+) (string, pgtype.UUID, error) {
+	// Get scene to verify campaign and get header image URL
+	scene, err := s.queries.GetScene(ctx, sceneID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", pgtype.UUID{}, ErrSceneNotFound
+		}
+		return "", pgtype.UUID{}, err
+	}
+
+	// Verify user is GM
+	isGM, err := s.queries.IsUserGM(ctx, generated.IsUserGMParams{
+		CampaignID: scene.CampaignID,
+		UserID:     userID,
+	})
+	if err != nil {
+		return "", pgtype.UUID{}, err
+	}
+	if !isGM {
+		return "", pgtype.UUID{}, ErrNotGM
+	}
+
+	// Start transaction
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", pgtype.UUID{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	// Delete scene (cascades to posts, compose_locks, compose_drafts via FK)
+	if deleteErr := qtx.DeleteScene(ctx, sceneID); deleteErr != nil {
+		return "", pgtype.UUID{}, deleteErr
+	}
+
+	// Decrement scene count
+	if decrementErr := qtx.DecrementSceneCount(ctx, scene.CampaignID); decrementErr != nil {
+		return "", pgtype.UUID{}, decrementErr
+	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return "", pgtype.UUID{}, commitErr
+	}
+
+	// Return header image URL for cleanup
+	if scene.HeaderImageUrl.Valid {
+		return scene.HeaderImageUrl.String, scene.CampaignID, nil
+	}
+	return "", scene.CampaignID, nil
 }
 
 // formatUUID converts a UUID byte slice to a string.

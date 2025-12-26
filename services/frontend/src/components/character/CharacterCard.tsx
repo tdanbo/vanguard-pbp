@@ -56,6 +56,8 @@ interface CharacterCardProps {
   onArchive: () => void
   onAssign: () => void
   onUnassign: () => void
+  isSelected?: boolean
+  onSelect?: () => void
   className?: string
 }
 
@@ -68,6 +70,8 @@ export function CharacterCard({
   onArchive,
   onAssign,
   onUnassign,
+  isSelected,
+  onSelect,
   className,
 }: CharacterCardProps) {
   const assignedMember = members.find((m) => m.user_id === character.assigned_user_id)
@@ -76,11 +80,22 @@ export function CharacterCard({
   const initials = getInitials(character.display_name)
   const gradient = getGradient(character.display_name)
 
+  const handleCardClick = () => {
+    if (onSelect && !isArchived) {
+      onSelect()
+    }
+  }
+
   return (
-    <Card className={cn(
-      "bg-card/50 rounded-sm overflow-hidden p-1",
-      className
-    )}>
+    <Card
+      className={cn(
+        "bg-card/50 rounded-sm overflow-hidden p-1",
+        onSelect && !isArchived && "cursor-pointer",
+        isSelected && "ring-2 ring-gold ring-offset-2 ring-offset-background",
+        className
+      )}
+      onClick={handleCardClick}
+    >
       <div className={cn(
         "bg-card rounded-sm overflow-hidden",
         isArchived ? "opacity-60" : "card-interactive",
@@ -132,7 +147,7 @@ export function CharacterCard({
 
         {/* GM Controls - top left (kebab menu) */}
         {isGM && (
-          <div className="absolute top-3 left-3">
+          <div className="absolute top-3 left-3" onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -213,7 +228,7 @@ export function CharacterCard({
         )
         }
 
-        interface CharacterCardsGridProps {
+interface CharacterCardsGridProps {
   characters: Character[]
   isGM: boolean
   members: CampaignMember[]
@@ -222,6 +237,8 @@ export function CharacterCard({
   onArchive: (character: Character) => void
   onAssign: (character: Character) => void
   onUnassign: (character: Character) => void
+  selectedCharacterId?: string | null
+  onSelectCharacter?: (character: Character) => void
   className?: string
 }
 
@@ -234,6 +251,8 @@ export function CharacterCardsGrid({
   onArchive,
   onAssign,
   onUnassign,
+  selectedCharacterId,
+  onSelectCharacter,
   className,
 }: CharacterCardsGridProps) {
   // Build character-to-scene mapping
@@ -264,6 +283,8 @@ export function CharacterCardsGrid({
           onArchive={() => onArchive(character)}
           onAssign={() => onAssign(character)}
           onUnassign={() => onUnassign(character)}
+          isSelected={selectedCharacterId === character.id}
+          onSelect={onSelectCharacter ? () => onSelectCharacter(character) : undefined}
         />
       ))}
     </div>

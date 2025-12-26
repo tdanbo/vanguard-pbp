@@ -314,7 +314,7 @@ func GetCampaignMembers(db *database.DB) gin.HandlerFunc {
 		// Build response with alias, and email only for GMs
 		response := make([]CampaignMemberResponse, len(members))
 		currentUserEmail, _ := middleware.GetUserEmail(c)
-		
+
 		for i, member := range members {
 			response[i] = CampaignMemberResponse{
 				ID:         member.ID.String(),
@@ -322,6 +322,7 @@ func GetCampaignMembers(db *database.DB) gin.HandlerFunc {
 				UserID:     member.UserID.String(),
 				Role:       string(member.Role),
 				Alias:      member.Alias.String,
+				Email:      "",
 				JoinedAt:   member.JoinedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
 			}
 

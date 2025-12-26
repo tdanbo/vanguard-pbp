@@ -50,6 +50,11 @@ export async function api<T>(
     body: body ? JSON.stringify(body) : undefined,
   })
 
+  // Handle 204 No Content responses (common for DELETE operations)
+  if (response.status === 204) {
+    return undefined as T
+  }
+
   const data = await response.json()
 
   if (!response.ok) {

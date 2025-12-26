@@ -19,22 +19,12 @@ import {
     EyeOff,
     X,
     Plus,
-    Trash2,
 } from "lucide-react";
 import { CharacterPortrait } from "@/components/character/CharacterPortrait";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useComposeLock } from "@/hooks/useComposeLock";
 import { useDraft } from "@/hooks/useDraft";
 import { useCampaignStore } from "@/stores/campaignStore";
+import { useAuthStore } from "@/stores/authStore";
 import { useToast } from "@/hooks/use-toast";
 import { APIError } from "@/lib/api";
 import { LockTimerBar } from "@/components/realtime";
@@ -54,9 +44,8 @@ interface ImmersiveComposerProps {
     editingPost?: Post | null;
     onEditComplete?: () => void;
     onEditCancel?: () => void;
-    // Delete functionality
+    // GM indicator
     isGM?: boolean;
-    onPostDeleted?: () => void;
     // Phase/pass controls
     currentPhase?: CampaignPhase;
     selectedCharacterPassState?: PassState;
@@ -77,20 +66,22 @@ export function ImmersiveComposer({
     onEditComplete,
     onEditCancel,
     isGM = false,
-    onPostDeleted,
     currentPhase,
     selectedCharacterPassState,
     isExpired = false,
 }: ImmersiveComposerProps) {
     const { toast } = useToast();
-    const { createPost, updatePost, deletePost } = useCampaignStore();
+    const { user } = useAuthStore();
+    const { createPost, updatePost } = useCampaignStore();
     const isEditMode = Boolean(editingPost);
+
+    // Determine if GM is editing someone else's character's post (skip compose lock)
+    // This is true when: GM + editing mode + character not owned by current user
+    const isGMEditingOthersCharacter = isGM && isEditMode && character && character.assigned_user_id !== user?.id;
 
     const [mode, setMode] = useState<"narrative" | "ooc">("narrative");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [narratorComposing, setNarratorComposing] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
     const textareaRefs = useRef<Map<number, HTMLTextAreaElement>>(new Map());
     const editInitializedRef = useRef<string | null>(null);
 
@@ -144,7 +135,8 @@ export function ImmersiveComposer({
         },
     });
 
-    const hasLock = isNarrator ? narratorComposing : hasCharacterLock;
+    // For GM editing other's posts, we use narratorComposing flag since we skip the compose lock
+    const hasLock = isNarrator ? narratorComposing : (hasCharacterLock || narratorComposing);
 
     // Draft hook - disable autoLoad when editing to prevent overwriting editingPost content
     const {
@@ -179,13 +171,22 @@ export function ImmersiveComposer({
             setIsHidden(editingPost.isHidden || false);
 
             // Auto-acquire lock when entering edit mode (only if not already holding a lock)
+            // Skip lock acquisition if GM is editing someone else's character's post
             const autoAcquireLock = async () => {
                 if (editingPost.characterId && !lockId) {
-                    // Character post - acquire compose lock
-                    try {
-                        await acquireLock(editingPost.isHidden || false);
-                    } catch {
-                        // Error is handled by onError callback in useComposeLock
+                    // Check if GM is editing a post from another user's character
+                    // In this case, skip compose lock (GM has direct edit permission)
+                    if (isGMEditingOthersCharacter) {
+                        // GM editing other's post - skip compose lock, just enable edit mode
+                        // The backend will validate GM permission on save
+                        setNarratorComposing(true); // Use this flag to enable editing UI
+                    } else {
+                        // Character post owned by user - acquire compose lock
+                        try {
+                            await acquireLock(editingPost.isHidden || false);
+                        } catch {
+                            // Error is handled by onError callback in useComposeLock
+                        }
                     }
                 } else if (!editingPost.characterId && !narratorComposing) {
                     // Narrator post - just set composing state
@@ -200,7 +201,7 @@ export function ImmersiveComposer({
         // Note: We use editingPost?.id to only re-run when editing a different post
         // Setters are intentionally excluded as they are unstable (change on every render)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editingPost?.id, acquireLock]);
+    }, [editingPost?.id, acquireLock, isGMEditingOthersCharacter]);
 
     // Update hidden status when toggle changes
     useEffect(() => {
@@ -267,11 +268,23 @@ export function ImmersiveComposer({
     };
 
     const handleReleaseLock = async () => {
-        if (isNarrator) {
+        if (isNarrator || isGMEditingOthersCharacter) {
+            // Narrator posts and GM editing other's posts use narratorComposing flag
             setNarratorComposing(false);
         } else {
             await releaseLock();
         }
+
+        // Always exit edit mode and clear state when releasing
+        if (isEditMode) {
+            editInitializedRef.current = null;
+            onEditCancel?.();
+        }
+
+        // Reset form state
+        setBlocks([]);
+        setOocText("");
+        setMode("narrative");
     };
 
     const handleSubmit = async () => {
@@ -334,7 +347,8 @@ export function ImmersiveComposer({
     const handleUpdate = async () => {
         if (!editingPost) return;
 
-        if (!isNarrator && !lockId) {
+        // Skip lock check for GM editing other's character's posts (they don't acquire a compose lock)
+        if (!isNarrator && !lockId && !isGMEditingOthersCharacter) {
             toast({
                 variant: "destructive",
                 title: "No lock",
@@ -384,48 +398,6 @@ export function ImmersiveComposer({
             setIsSubmitting(false);
         }
     };
-
-    const handleCancelEdit = async () => {
-        editInitializedRef.current = null;
-        await handleReleaseLock();
-        onEditCancel?.();
-        // Reset state
-        setBlocks([]);
-        setOocText("");
-        setMode("narrative");
-    };
-
-    const handleDeletePost = async () => {
-        if (!editingPost) return;
-
-        setIsDeleting(true);
-
-        try {
-            await deletePost(editingPost.id);
-            await handleReleaseLock();
-
-            toast({ title: "Post deleted successfully" });
-            setShowDeleteConfirm(false);
-            onPostDeleted?.();
-
-            // Reset state
-            setBlocks([]);
-            setOocText("");
-            setMode("narrative");
-        } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "Failed to delete post",
-                description: (error as Error).message,
-            });
-        } finally {
-            setIsDeleting(false);
-        }
-    };
-
-    // Can delete if: GM (always), or owner of unlocked post
-    const canDelete =
-        isEditMode && (isGM || (editingPost && !editingPost.isLocked));
 
     // If no character is selected and not narrator mode, show minimal UI
     if (!character && !isNarrator) {
@@ -486,7 +458,7 @@ export function ImmersiveComposer({
     return (
         <div className="fixed bottom-0 left-0 right-0 lg:left-1/4 lg:right-1/4 p-4 z-40">
             <div className="w-full">
-                <div className="bg-card rounded-sm overflow-hidden">
+                <div className={`bg-card rounded-sm overflow-hidden ${hasLock && isHidden ? "ring-2 ring-amber-500/50" : ""}`}>
                     {/* Lock timer bar (not shown for narrator mode) */}
                     {hasLock && !isNarrator && remainingSeconds > 0 && (
                         <LockTimerBar
@@ -519,16 +491,6 @@ export function ImmersiveComposer({
                                 </span>
                             </div>
                             <div className="flex items-center gap-2">
-                                {isEditMode && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={handleCancelEdit}
-                                    >
-                                        <X className="h-4 w-4 mr-1" />
-                                        Cancel
-                                    </Button>
-                                )}
                                 {/* Pass button for players and GMs (non-edit mode, PC phase, has PC character) */}
                                 {!isEditMode &&
                                     !isNarrator &&
@@ -646,6 +608,14 @@ export function ImmersiveComposer({
                                         </Select>
                                     )}
                             </div>
+
+                            {/* Hidden mode indicator */}
+                            {isHidden && (
+                                <div className="mx-4 mt-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-500 flex items-center gap-2">
+                                    <EyeOff className="h-3 w-3" />
+                                    <span>This post will only be visible to the GM until revealed</span>
+                                </div>
+                            )}
 
                             {/* Content area */}
                             <div className="p-4 pt-2">
@@ -766,53 +736,30 @@ export function ImmersiveComposer({
                                     {settings.hiddenPosts && (
                                         <Button
                                             variant={
-                                                isHidden ? "secondary" : "ghost"
+                                                isHidden ? "default" : "ghost"
                                             }
                                             size="sm"
-                                            className="h-8"
+                                            className={`h-8 ${isHidden ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}`}
                                             onClick={() =>
                                                 setIsHidden(!isHidden)
                                             }
                                         >
                                             <EyeOff className="h-4 w-4 mr-1" />
-                                            Hidden
+                                            {isHidden ? "Hidden" : "Hide"}
                                         </Button>
                                     )}
                                 </div>
 
-                                {/* Release/Cancel/Delete and Submit/Save */}
+                                {/* Release and Submit/Save */}
                                 <div className="flex items-center gap-2">
-                                    {isEditMode ? (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={handleCancelEdit}
-                                        >
-                                            <X className="h-4 w-4 mr-1" />
-                                            Cancel
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={handleReleaseLock}
-                                        >
-                                            <Unlock className="h-4 w-4 mr-1" />
-                                            Release
-                                        </Button>
-                                    )}
-                                    {canDelete && (
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() =>
-                                                setShowDeleteConfirm(true)
-                                            }
-                                        >
-                                            <Trash2 className="h-4 w-4 mr-1" />
-                                            Delete
-                                        </Button>
-                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleReleaseLock}
+                                    >
+                                        <Unlock className="h-4 w-4 mr-1" />
+                                        Release
+                                    </Button>
                                     <Button
                                         size="sm"
                                         onClick={
@@ -827,15 +774,22 @@ export function ImmersiveComposer({
                                                 !oocText.trim()) ||
                                             isSubmitting
                                         }
+                                        className={isHidden && !isEditMode ? "bg-amber-600 hover:bg-amber-700" : ""}
                                     >
                                         {isSubmitting ? (
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                         ) : (
                                             <>
-                                                <Send className="h-4 w-4 mr-1" />
+                                                {isHidden && !isEditMode ? (
+                                                    <EyeOff className="h-4 w-4 mr-1" />
+                                                ) : (
+                                                    <Send className="h-4 w-4 mr-1" />
+                                                )}
                                                 {isEditMode
                                                     ? "Save Changes"
-                                                    : "Post"}
+                                                    : isHidden
+                                                        ? "Post Hidden"
+                                                        : "Post"}
                                             </>
                                         )}
                                     </Button>
@@ -845,39 +799,6 @@ export function ImmersiveComposer({
                     )}
                 </div>
             </div>
-
-            {/* Delete confirmation dialog */}
-            <AlertDialog
-                open={showDeleteConfirm}
-                onOpenChange={setShowDeleteConfirm}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete this post?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. The post will be
-                            permanently deleted.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDeletePost}
-                            disabled={isDeleting}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            {isDeleting ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                            ) : (
-                                <Trash2 className="h-4 w-4 mr-1" />
-                            )}
-                            Delete
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </div>
     );
 }

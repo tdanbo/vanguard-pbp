@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils"
 import { CharacterAssignmentWidget } from "@/components/scene/CharacterAssignmentWidget"
 import { CharacterBubble } from "@/components/character/CharacterBubble"
 import { AddBubble } from "@/components/character/AddBubble"
+import { SceneSettingsMenu } from "@/components/scene/SceneSettingsMenu"
 import { useCampaignStore } from "@/stores/campaignStore"
-import { useEffect, useState } from "react"
+import { useMemo, useState } from "react"
 import type { CampaignPhase, PassState, Character } from "@/types"
 
 interface SceneCardProps {
@@ -49,20 +50,20 @@ export function SceneCard({
 }: SceneCardProps) {
   const navigate = useNavigate()
   const { characters } = useCampaignStore()
-  const [sceneCharacters, setSceneCharacters] = useState<Character[]>([])
   const [assignmentWidgetOpen, setAssignmentWidgetOpen] = useState(false)
   const isArchived = scene.is_archived
 
-  useEffect(() => {
-    // Get character data for this scene's character IDs
-    const chars = scene.character_ids
+  // Get character data for this scene's character IDs
+  const sceneCharacters = useMemo(() => {
+    return scene.character_ids
       .map(id => characters.find(c => c.id === id))
       .filter(Boolean) as Character[]
-    setSceneCharacters(chars)
   }, [scene.character_ids, characters])
 
   // Filter to only PCs for the party display
-  const pcCharacters = sceneCharacters.filter(c => c.character_type === 'pc')
+  const pcCharacters = useMemo(() => {
+    return sceneCharacters.filter(c => c.character_type === 'pc')
+  }, [sceneCharacters])
 
   return (
     <Card className={cn(
@@ -98,11 +99,16 @@ export function SceneCard({
         {/* Badges container */}
         <div className="absolute top-3 right-3 flex gap-2">
           {isGM && phase === 'gm_phase' && (
-            <CharacterAssignmentWidget
-              campaignId={campaignId}
-              sceneId={scene.id}
-              sceneCharacterIds={scene.character_ids}
-            />
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <CharacterAssignmentWidget
+                campaignId={campaignId}
+                sceneId={scene.id}
+                sceneCharacterIds={scene.character_ids}
+              />
+            </div>
           )}
           {hasUnread && <NewBadge />}
           {isArchived && (
@@ -164,7 +170,7 @@ export function SceneCard({
         )}
 
         {/* Bottom section - fixed position */}
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <MessageSquare className="h-4 w-4" />
             <span>
@@ -172,6 +178,19 @@ export function SceneCard({
               {(scene.post_count ?? 0) === 1 ? "post" : "posts"}
             </span>
           </div>
+          {isGM && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <SceneSettingsMenu
+                campaignId={campaignId}
+                sceneId={scene.id}
+                sceneTitle={scene.title}
+                isArchived={isArchived ?? false}
+              />
+            </div>
+          )}
         </div>
       </CardContent>
     </div>

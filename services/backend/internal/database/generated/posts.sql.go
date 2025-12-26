@@ -98,6 +98,45 @@ func (q *Queries) DeletePost(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const editPostWitnesses = `-- name: EditPostWitnesses :one
+UPDATE posts
+SET
+    witnesses = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, scene_id, character_id, user_id, blocks, ooc_text, witnesses, is_hidden, is_draft, is_locked, locked_at, edited_by_gm, intention, modifier, created_at, updated_at
+`
+
+type EditPostWitnessesParams struct {
+	ID        pgtype.UUID   `json:"id"`
+	Witnesses []pgtype.UUID `json:"witnesses"`
+}
+
+// GM-only: Update witnesses on a post without changing hidden status
+func (q *Queries) EditPostWitnesses(ctx context.Context, arg EditPostWitnessesParams) (Post, error) {
+	row := q.db.QueryRow(ctx, editPostWitnesses, arg.ID, arg.Witnesses)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.SceneID,
+		&i.CharacterID,
+		&i.UserID,
+		&i.Blocks,
+		&i.OocText,
+		&i.Witnesses,
+		&i.IsHidden,
+		&i.IsDraft,
+		&i.IsLocked,
+		&i.LockedAt,
+		&i.EditedByGm,
+		&i.Intention,
+		&i.Modifier,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getCharacterPostCountInScene = `-- name: GetCharacterPostCountInScene :one
 SELECT COUNT(*) FROM posts
 WHERE scene_id = $1 AND character_id = $2 AND is_draft = false

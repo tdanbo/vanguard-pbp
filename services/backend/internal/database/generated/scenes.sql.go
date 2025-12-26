@@ -726,6 +726,55 @@ func (q *Queries) GetVisibleScenesForCharacter(ctx context.Context, arg GetVisib
 	return items, nil
 }
 
+const getVisibleScenesForUser = `-- name: GetVisibleScenesForUser :many
+SELECT DISTINCT s.id, s.campaign_id, s.title, s.description, s.header_image_url, s.character_ids, s.pass_states, s.is_archived, s.created_at, s.updated_at
+FROM scenes s
+INNER JOIN posts p ON p.scene_id = s.id
+INNER JOIN character_assignments ca ON ca.character_id = ANY(p.witnesses)
+WHERE s.campaign_id = $1
+  AND ca.user_id = $2
+  AND s.is_archived = false
+ORDER BY s.created_at ASC
+`
+
+type GetVisibleScenesForUserParams struct {
+	CampaignID pgtype.UUID `json:"campaign_id"`
+	UserID     pgtype.UUID `json:"user_id"`
+}
+
+// Returns scenes where any of the user's assigned characters have witnessed posts
+// Used for fog of war filtering - aggregates visibility across all user's characters
+func (q *Queries) GetVisibleScenesForUser(ctx context.Context, arg GetVisibleScenesForUserParams) ([]Scene, error) {
+	rows, err := q.db.Query(ctx, getVisibleScenesForUser, arg.CampaignID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Scene
+	for rows.Next() {
+		var i Scene
+		if err := rows.Scan(
+			&i.ID,
+			&i.CampaignID,
+			&i.Title,
+			&i.Description,
+			&i.HeaderImageUrl,
+			&i.CharacterIds,
+			&i.PassStates,
+			&i.IsArchived,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const incrementSceneCount = `-- name: IncrementSceneCount :exec
 UPDATE campaigns
 SET
